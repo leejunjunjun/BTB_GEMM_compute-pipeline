@@ -1,0 +1,923 @@
+<title>GEMM Reuse 시뮬레이터</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: lab-notebook column (max 1080px); each section = question → live figure → short reading of the figure */
+:root{
+  --bg:#f4f6f9; --panel:#ffffff; --ink:#18202c; --mute:#5b6576; --line:#dce1e8; --grid:#edf0f4;
+  --a:#2563eb; --b:#e8590c; --mem:#e03131; --hit:#2b8a3e; --psum:#7048e8; --accent:#0b7285;
+  --t0:#0b7285; --t1:#c2255c; --t2:#e67700; --t3:#5f3dc4;
+  --sans:"IBM Plex Sans KR",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1217; --panel:#161b22; --ink:#e5e9ef; --mute:#98a2b1; --line:#2a313b; --grid:#1d232b;
+  --a:#6b9cf5; --b:#f2914f; --mem:#ff6b6b; --hit:#5fd17a; --psum:#a28bfa; --accent:#3bc9db;
+  --t0:#3bc9db; --t1:#f06595; --t2:#ffa94d; --t3:#9775fa; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1217; --panel:#161b22; --ink:#e5e9ef; --mute:#98a2b1; --line:#2a313b; --grid:#1d232b;
+  --a:#6b9cf5; --b:#f2914f; --mem:#ff6b6b; --hit:#5fd17a; --psum:#a28bfa; --accent:#3bc9db;
+  --t0:#3bc9db; --t1:#f06595; --t2:#ffa94d; --t3:#9775fa; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.65 var(--sans);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+.wrap{max-width:1080px;margin:0 auto}
+header{padding-block:36px 8px}
+h1{font-size:30px;line-height:1.25;margin:0 0 10px;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:21px;margin:0 0 6px;text-wrap:balance}
+h3{font-size:15px;margin:0 0 6px}
+p{margin:0 0 10px;max-width:68ch}
+.lede{color:var(--mute);font-size:16px}
+.q{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+section{padding-block:30px;border-top:1px solid var(--line)}
+header+section{border-top:0}
+code,.mono{font-family:var(--mono);font-size:.92em}
+.mute{color:var(--mute)}
+.small{font-size:13px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.num{font-variant-numeric:tabular-nums}
+
+/* analogy chips */
+.map{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:14px 0 6px}
+.map div{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.map b{display:block;font-size:14px}
+.map span{font-size:13px;color:var(--mute)}
+.fig{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:18px;align-items:center;margin-top:10px}
+.fig svg{width:100%;height:auto;display:block}
+@media (max-width:760px){.fig{grid-template-columns:1fr}}
+
+/* controls */
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 10px}
+.pbtn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px;cursor:pointer;text-align:left;line-height:1.3}
+.pbtn small{display:block;color:var(--mute);font-size:11px}
+.pbtn.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.pbtn.on small{color:var(--accent)}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 11px;font:inherit;font-size:13px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--panel);font-weight:500}
+button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+label.ctl{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--mute)}
+label.ctl{max-width:100%}
+label.ctl select{max-width:100%;min-width:0}
+select{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+select:disabled{opacity:.45}
+input[type=number]{font:inherit;font-size:13px;width:5.2em;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-variant-numeric:tabular-nums}
+input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.terms{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px 18px;margin:0 0 12px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.terms dt{font-size:13px;font-weight:700}
+.terms dd{margin:2px 0 0;font-size:12.5px;color:var(--mute);line-height:1.55}
+.custom{display:flex;flex-wrap:wrap;gap:8px 16px;padding:10px 12px;border:1px dashed var(--line);border-radius:8px;margin-bottom:12px}
+
+/* simulator */
+.sim{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.stage{padding:10px}
+.stage canvas{display:block;width:100%;touch-action:pan-y;border-radius:6px}
+.stage canvas.pannable{cursor:grab;outline:1px solid var(--line)}
+.stage canvas.dragging{cursor:grabbing}
+.zoombar{margin-bottom:8px}
+.zoomhint{margin-left:auto}
+@media (max-width:640px){.zoomhint{display:none}}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--mute);padding:6px 4px 0}
+.sw{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:-2px;margin-right:5px}
+.side{padding:14px 16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr) minmax(0,1.3fr);gap:14px 28px;align-items:start}
+.side>div:first-child{grid-column:1/-1}
+.side .kv>span:not(.v):not(.srcHead){white-space:nowrap}
+@media (max-width:760px){.side{grid-template-columns:minmax(0,1fr)}}
+.side .meters{display:grid;gap:10px}
+.side .result{min-width:0}
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:13px}
+.kv .v{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.kv .srcHead{grid-column:1/-1;font-size:12px;color:var(--mute);margin-top:4px}
+@media (min-width:700px){.kv .v.src{white-space:nowrap}}
+.big{font-family:var(--mono);font-size:22px;font-weight:500;font-variant-numeric:tabular-nums}
+.meter{font-size:12px;color:var(--mute)}
+.meter .track{height:8px;border-radius:4px;background:var(--grid);overflow:hidden;margin-top:3px}
+.meter .fill{height:100%;border-radius:4px;transition:width .08s linear}
+.tag{display:inline-block;font-size:10.5px;font-family:var(--mono);padding:1px 6px;border-radius:999px;border:1px solid currentColor;vertical-align:1px}
+.tag.meas{color:var(--hit)}.tag.est{color:var(--b)}
+.note{font-size:13px;color:var(--mute);border-left:3px solid var(--line);padding:4px 0 4px 12px;margin:10px 0;max-width:72ch}
+.reading{margin-top:12px;font-size:14px;max-width:72ch}
+
+/* comparison bars */
+.cmp{margin-top:14px;padding:12px 14px}
+.crow{display:grid;grid-template-columns:minmax(150px,240px) minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:13px;padding:3px 0;cursor:pointer;border-radius:6px}
+.crow:hover{background:var(--grid)}
+.crow .track{height:14px;background:var(--grid);border-radius:3px;overflow:hidden}
+.crow .fill{height:100%;background:var(--mute);opacity:.55;border-radius:3px}
+.crow.on .fill{background:var(--accent);opacity:1}
+.crow.on{font-weight:500}
+.crow .v{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.crow{grid-template-columns:96px minmax(0,1fr) 78px;font-size:12px}}
+
+/* tables */
+.tw{overflow-x:auto;margin-top:12px}
+table{border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+th,td{padding:7px 12px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{font-size:12px;color:var(--mute);font-weight:500;background:var(--grid)}
+td:first-child,th:first-child{text-align:left}
+.heat td.cell{cursor:pointer;font-family:var(--mono);position:relative}
+.heat td.cell:hover{outline:2px solid var(--accent);outline-offset:-2px}
+.dir tr.row{cursor:pointer}
+.dir tr.row:hover td{background:var(--grid)}
+.saved{margin-top:14px;padding:12px 14px}
+.savedHead{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;margin-bottom:8px}
+.savedHead .acts{display:flex;gap:6px;flex-wrap:wrap}
+.saved .tw{margin-top:0}
+.saved table{width:100%}
+.saved tr.row{cursor:pointer}
+.saved tr.row:hover td{background:var(--grid)}
+.saved tr.row.on td{font-weight:600}
+.saved th,.saved td{padding:6px 8px}
+.saved th{white-space:normal;vertical-align:bottom;line-height:1.3}
+.saved th.l,.saved td.l{text-align:left}
+.saved td.cfgc{text-align:left;white-space:normal;min-width:200px}
+.saved td.best{color:var(--hit);font-weight:600}
+.saved .del{border:0;background:none;color:var(--mute);cursor:pointer;font:inherit;font-size:15px;padding:0 4px;line-height:1}
+.saved .del:hover{color:var(--mem)}
+.saved .empty{font-size:13px;color:var(--mute);padding:6px 0}
+.dir tr.top td{font-weight:500}
+.heat td.best{box-shadow:inset 0 0 0 2.5px var(--hit);font-weight:500}
+.heat td.sep,.heat th.grp+th.grp{border-left:2px solid var(--line)}
+.heat th.grp{text-align:center}
+.heat td.cell small{display:block;font-family:var(--sans);font-size:10.5px;line-height:1.2;opacity:.85}
+.concl td{white-space:normal;text-align:left;vertical-align:top}
+
+/* pipeline */
+.pipe{padding:10px}
+.pipe canvas{display:block;width:100%}
+footer{border-top:1px solid var(--line);padding-top:18px;font-size:12.5px;color:var(--mute)}
+footer p{max-width:90ch}
+@media (prefers-reduced-motion:reduce){.meter .fill{transition:none}}
+.sizebar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:14px 0 4px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.sizebar .small{flex-basis:100%}
+.more{margin-top:18px}
+.more summary{cursor:pointer;font-size:14px;color:var(--accent);font-weight:500;padding:6px 0}
+.more summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cgroup{margin:16px 0 0;font-size:14px;color:var(--mute);font-weight:500}
+.cases{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:14px}
+.case{display:flex;flex-direction:column;gap:6px;text-align:left;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer}
+.case:hover{border-color:var(--accent)}
+.case.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.case .cfg{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
+.case b{font-size:14.5px;line-height:1.35}
+.case .why{font-size:13px;color:var(--mute);line-height:1.5}
+.case .res{margin-top:auto;padding-top:6px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="q">HandS · Compute / Memory 공동 논의 자료</div>
+  <h1>무엇을 쌓아 둘 것인가: 입력 버퍼와 누산기 복제</h1>
+  <p class="lede">우리 가속기는 계산보다 메모리에서 데이터를 가져오는 데 시간을 더 많이 씁니다. 한 번 가져온 데이터를 다시 쓰려면 칩 안 어딘가에 쌓아 둬야 하는데, 쌓는 자리는 두 가지입니다. 이 페이지에서는 기본 RTL과 같은 방식으로 행렬 곱셈을 돌려 보면서 두 방식을 비교합니다.</p>
+</header>
+
+<!-- 1 -->
+<section id="basics">
+  <div class="q">1 · 무엇을 계산하나</div>
+  <h2>매 사이클 A의 열 4개와 B의 행 4개를 외적해서 누산기 16개에 더합니다</h2>
+  <div class="fig">
+    <div>
+      <p>기본 설계(<code>operand_loader</code> + <code>mac_array</code>)는 한 사이클에 이렇게 움직입니다. A의 k번째 열에서 4개(4행)를 읽고, B의 k번째 행에서 4개(4열)를 읽습니다. 둘을 서로 곱하면 4 × 4 = 16개의 곱이 나오고, 이를 누산기 16개에 하나씩 더합니다.</p>
+      <p>k를 0부터 K−1까지 반복하면 C의 4×4 <b>타일</b> 하나가 완성됩니다. 그다음 <code>gemm_control</code>이 옆 열 타일로, 열이 끝나면 아래 행 타일로 넘어갑니다(행 → 열 → k 순서).</p>
+      <p>공식 벤치마크 64×128×128에서는 C가 16 × 32 = <b>512타일</b>이고, 타일마다 128단계를 거치니 모두 65,536단계입니다. 메모리는 한 번에 1바이트씩, 요청을 하나씩만 받으므로 몇 번 읽느냐가 전체 시간을 거의 결정합니다.</p>
+    </div>
+    <svg viewBox="0 0 420 250" role="img" aria-label="A의 열 4개와 B의 행 4개를 외적해 4x4 타일에 더하는 한 사이클">
+      <g font-family="IBM Plex Sans KR, sans-serif" font-size="12">
+        <text x="150" y="16" fill="var(--mute)">B 조각: B의 k번째 행에서 4개</text>
+        <g transform="translate(150,26)">
+          <rect x="0" y="0" width="120" height="28" fill="var(--b)" opacity=".18" stroke="var(--b)"/>
+          <g stroke="var(--b)" opacity=".7"><line x1="30" y1="0" x2="30" y2="28"/><line x1="60" y1="0" x2="60" y2="28"/><line x1="90" y1="0" x2="90" y2="28"/></g>
+        </g>
+        <text x="8" y="70" fill="var(--mute)">A 조각:</text>
+        <text x="8" y="86" fill="var(--mute)">A의 k번째 열</text>
+        <text x="8" y="102" fill="var(--mute)">에서 4개</text>
+        <g transform="translate(108,66)">
+          <rect x="0" y="0" width="28" height="120" fill="var(--a)" opacity=".18" stroke="var(--a)"/>
+          <g stroke="var(--a)" opacity=".7"><line x1="0" y1="30" x2="28" y2="30"/><line x1="0" y1="60" x2="28" y2="60"/><line x1="0" y1="90" x2="28" y2="90"/></g>
+        </g>
+        <g transform="translate(150,66)">
+          <rect x="0" y="0" width="120" height="120" fill="var(--psum)" opacity=".14" stroke="var(--psum)"/>
+          <g stroke="var(--psum)" opacity=".45">
+            <line x1="30" y1="0" x2="30" y2="120"/><line x1="60" y1="0" x2="60" y2="120"/><line x1="90" y1="0" x2="90" y2="120"/>
+            <line x1="0" y1="30" x2="120" y2="30"/><line x1="0" y1="60" x2="120" y2="60"/><line x1="0" y1="90" x2="120" y2="90"/>
+          </g>
+          <text x="60" y="56" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">곱 16개 (외적)</text>
+          <text x="60" y="74" text-anchor="middle" fill="var(--mute)">누산기 16개에 더함</text>
+        </g>
+        <text x="282" y="110" fill="var(--ink)" font-weight="700">C의 타일 하나</text>
+        <text x="282" y="128" fill="var(--mute)">(출력 16개)</text>
+        <text x="282" y="160" fill="var(--mute)">k = 0 … K−1</text>
+        <text x="282" y="176" fill="var(--mute)">반복하면 완성</text>
+        <text x="150" y="214" fill="var(--mute)">네모 한 칸 = 원소 1개 (1바이트)</text>
+        <text x="150" y="232" fill="var(--mute)">MAC 연산 1번 = 이 그림 한 번</text>
+      </g>
+    </svg>
+  </div>
+  <div class="map">
+    <div><b>PE 배열 4×4</b><span>사이클마다 곱 16개를 만들어 누산기 16개에 더합니다.</span></div>
+    <div><b>메모리 인터페이스</b><span>요청 1개에 1바이트, 동시에 한 요청만 처리합니다.</span></div>
+    <div><b>입력 버퍼 (A/B reuse buffer)</b><span>읽어 온 A, B 조각을 다시 쓰려고 보관합니다. Memory 팀 담당입니다.</span></div>
+    <div><b>누산기 / psum 저장</b><span>누산 중인 타일의 중간 합을 보관합니다. 누산기는 PE 안의 FF이고, k-outer와 K 묶음은 중간 합을 별도 psum 메모리(BRAM)에 넣었다 꺼냅니다. Compute 팀 담당입니다.</span></div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="sim">
+  <div class="q">2 · 시뮬레이터</div>
+  <h2>계산 순서와 쌓아 둘 자리를 바꿔 가며 돌려 보기</h2>
+  <p>그림의 네모 한 칸은 원소 하나입니다. 세로로 4칸 묶인 것이 A 조각, 가로로 4칸 묶인 것이 B 조각, 4×4 묶음이 C 타일입니다. 행렬 크기를 바꾸면 같은 루프를 그 크기로 다시 돌립니다. 큰 크기는 칸이 작아지니, 움직임을 보려면 작은 크기로, 숫자를 보려면 공식 벤치마크 크기로 보세요.</p>
+
+  <div class="sizebar">
+    <label class="ctl" for="sCase">공식 testbench <select id="sCase" style="max-width:15em"><option value="">직접 입력</option></select></label>
+    <label class="ctl" for="sM">M (A의 행, 1–64) <input type="number" id="sM" min="1" max="64" step="1" value="32"></label>
+    <label class="ctl" for="sN">N (B의 열, 1–128) <input type="number" id="sN" min="1" max="128" step="1" value="64"></label>
+    <label class="ctl" for="sK">K (공통 길이, 1–1024) <input type="number" id="sK" min="1" max="1024" step="1" value="8"></label>
+    <label class="ctl" for="sL">메모리 지연 <select id="sL"><option value="1">1 사이클</option><option value="2">2 사이클</option><option value="3">3 사이클</option><option value="4">4 사이클</option><option value="6">6 사이클</option><option value="23">23 사이클</option></select></label>
+    <button class="btn" id="szSmall" type="button">보기 좋은 크기 32×64×8</button>
+    <button class="btn" id="szBench" type="button">공식 벤치마크 64×128×128</button>
+    <span class="small mute" id="szInfo"></span>
+  </div>
+
+  <div class="presets" id="presets" role="group" aria-label="미리 정한 설정"></div>
+  <div class="custom" id="custom">
+    <label class="ctl" for="cOrder">계산 순서 <select id="cOrder"><option value="0">k-inner (타일 하나를 K까지 끝내고 다음 타일)</option><option value="1">k-outer (k 하나를 모든 타일에 더하고 다음 k)</option><option value="2">K 묶음 (블록마다 K를 Kc씩 끊어 누산)</option></select></label>
+    <label class="ctl" for="cA">A 버퍼 <select id="cA"><option value="0">없음</option><option value="0.25">0.25 KB (64칸)</option><option value="0.5">0.5 KB (슬라이드, 128칸)</option><option value="1">1 KB</option><option value="2">2 KB</option><option value="4">4 KB (Set 1~3, 1,024칸)</option><option value="8">8 KB</option><option value="16">16 KB</option><option value="32">32 KB</option></select></label>
+    <label class="ctl" for="cB">B 버퍼 <select id="cB"><option value="0">없음</option><option value="0.25">0.25 KB</option><option value="0.5">0.5 KB</option><option value="1">1 KB</option><option value="2">2 KB</option><option value="4">4 KB (Set 3)</option><option value="8">8 KB</option><option value="16">16 KB (Set 2)</option><option value="all">B 전부 (크기 무관)</option></select></label>
+    <label class="ctl" for="cAF">A 주소 방식 <select id="cAF"><option value="0">flexible buffer</option><option value="1">fixed buffer</option></select></label>
+    <label class="ctl" for="cBF">B 주소 방식 <select id="cBF"><option value="0">flexible buffer</option><option value="1">fixed buffer</option></select></label>
+    <label class="ctl" for="cG" title="B 버퍼에 들어가는 만큼 열 타일을 묶어, 묶음 하나를 모든 행 타일이 다 쓴 뒤 다음 묶음으로 넘어가는 순서">그룹 루프 (Set 3) <select id="cG"><option value="0">끔</option><option value="1">켬</option></select></label>
+    <label class="ctl" for="cAcc">누산기 세트 수 (ACC 복제) <select id="cAcc"><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="8">8</option><option value="auto">8세트, K마다 유리한 쪽 사용</option></select></label>
+    <label class="ctl" for="cBH">블록 행 타일 BH <select id="cBH"><option>1</option><option>2</option><option>4</option><option>8</option><option>16</option></select></label>
+    <label class="ctl" for="cBW">블록 열 타일 BW <select id="cBW"><option>1</option><option>2</option><option>4</option><option>8</option><option>16</option><option>32</option></select></label>
+    <label class="ctl" for="cKc">묶음 길이 Kc <select id="cKc"><option>4</option><option>8</option><option>16</option><option>32</option><option>64</option><option>128</option><option>256</option><option>512</option><option>1024</option></select></label>
+    <label class="ctl" for="cPW">psum 포트 폭 <select id="cPW"><option value="32">32비트 (타일당 16사이클)</option><option value="512">512비트 (타일당 1사이클)</option></select></label>
+    <label class="ctl" for="cDir">누산기 방향 <select id="cDir"><option value="b">B 방향: 행 타일 n개가 B 조각 공유 (B_reuse)</option><option value="a">A 방향: 열 타일 n개가 A 조각 공유 (A_reuse)</option><option value="ab">양쪽: A_reuse × B_reuse</option><option value="auto">모양에 따라 자동 (Idea 1)</option></select></label>
+  </div>
+  <dl class="terms">
+    <div><dt>그룹 루프 (Set 3)</dt><dd>B 버퍼에 들어가는 만큼(G = B 버퍼 칸 수 / K) 열 타일을 한 묶음으로 잡고, 그 묶음을 모든 행 타일이 다 쓴 다음 다음 묶음으로 넘어가는 순서입니다. 묶음의 B는 버퍼에서 계속 재사용되어 B를 한 번만 읽지만, 묶음이 바뀔 때마다 A를 다시 읽습니다. 그림에서 점선이 묶음 경계입니다. Set 3은 G가 2보다 작거나, 묶음 하나에 열 타일이 다 들어가거나, M이 4 이하(행 타일 1개)이면 묶지 않고 Set 2 순서로 돕니다.</dd></div>
+    <div><dt>fixed / flexible buffer</dt><dd>fixed buffer는 타일 하나에 최대 K(1,024칸) 크기 자리를 잡아 K가 짧으면 남는 칸을 비워 둡니다. flexible buffer는 타일을 K 길이로 이어 붙여, 4 KB에 1024 / K개 타일이 들어갑니다. fixed A 버퍼(4 KB)는 행 타일 1개 자리뿐이라 새 행 타일이 오면 덮어씁니다. flexible A 버퍼는 지금 쓰는 칸을 뺀 남는 칸에 앞쪽 행 타일을 끝까지 남겨 두어, Set 3에서 묶음이 바뀔 때 그만큼 A를 다시 읽지 않습니다. 같은 BRAM이면 flexible이 손해가 없으므로 이 페이지의 비교는 A, B 모두 flexible buffer를 기준으로 합니다. fixed buffer는 A, B 주소 방식에서 골라 비교해 볼 수 있습니다.</dd></div>
+    <div><dt>누산기 세트와 방향</dt><dd>누산기 n세트는 출력 타일 n개를 동시에 누산합니다. B 방향은 행 타일 n개가 B 조각 하나를 같이 쓰고(B 재읽기 감소, A 버퍼에 행 타일 n개 필요), A 방향은 열 타일 n개가 A 조각 하나를 같이 씁니다(A 버퍼가 있으면 효과 없음).</dd></div>
+    <div><dt>메모리 / 버퍼 / staging</dt><dd>MAC 연산마다 A 조각과 B 조각이 어디서 왔는지를 바이트로 셉니다. staging은 지금 k 단계에서 이미 읽어 레지스터에 들고 있는 조각을 다음 연산에 그대로 쓴 경우로, 누산기를 여러 세트 쓰거나 k-outer일 때 같은 조각이 연달아 쓰이면 생깁니다. 버퍼는 A·B 버퍼에서 꺼낸 경우이고, 메모리는 새로 읽은 경우입니다. 세 값의 합은 연산에 들어간 A(또는 B) 전체 바이트입니다.</dd></div>
+    <div><dt>k-inner / k-outer</dt><dd>k-inner는 타일 하나를 k = 0…K−1까지 끝내고 다음 타일로 갑니다(기본 RTL). k-outer는 k 하나를 모든 타일에 더하고 다음 k로 가서 입력을 다시 읽지 않는 대신 모든 타일의 중간 합을 들고 있습니다.</dd></div>
+    <div><dt>K 묶음</dt><dd>출력을 행 타일 BH개 × 열 타일 BW개 블록으로 나누고, 블록마다 K를 Kc씩 끊어 누산합니다. 묶음 하나에 쓰는 A(BH × 4 × Kc 바이트)와 B(Kc × BW × 4 바이트)를 청크 버퍼에 담아 블록 안에서 다시 쓰고, 묶음 사이의 중간 합은 psum 메모리(BH × BW × 64 바이트)에 넣었다 꺼냅니다. A 읽기 = M·K·⌈C/BW⌉, B 읽기 = N·K·⌈R/BH⌉로 K와 상관없이 블록 크기로 정해집니다. Kc = K이면 psum 없이 k-inner와 같고, 블록이 행렬 전체이고 Kc = 1이면 완전 k-outer입니다. 그림의 점선이 블록 경계이고, 보라 테두리 타일은 psum 메모리에 보관 중인 타일입니다.</dd></div>
+  </dl>
+
+  <div class="sim">
+    <div class="panel stage">
+      <div class="bar" style="margin-bottom:8px">
+        <button class="btn primary" id="play" type="button">▶ 재생</button>
+        <button class="btn" id="stepB" type="button" aria-label="한 단계 뒤로">◀</button>
+        <button class="btn" id="stepF" type="button" aria-label="한 단계 앞으로">▶︎ 1</button>
+        <button class="btn" id="reset" type="button">처음으로</button>
+        <button class="btn" id="toEnd" type="button">끝까지</button>
+        <label class="ctl" for="speed">속도 <select id="speed"><option value="3">느리게</option><option value="20">보통</option><option value="120" selected>빠르게</option><option value="1500">아주 빠르게</option></select></label>
+      </div>
+      <div class="bar zoombar">
+        <button class="btn" id="zoomOut" type="button" aria-label="축소">－</button>
+        <button class="btn" id="zoomIn" type="button" aria-label="확대">＋</button>
+        <button class="btn" id="zoomFit" type="button">화면에 맞춤</button>
+        <span class="small mute" id="zoomLabel"></span>
+        <label class="ctl" for="follow"><input type="checkbox" id="follow"> 현재 위치 따라가기</label>
+        <span class="small mute zoomhint">칸이 10px 이상이면 읽은 횟수가 숫자로 표시됩니다 · 끌어서 이동 · Ctrl(⌘) + 휠로 확대/축소</span>
+      </div>
+      <canvas id="cv" aria-label="A, B, C 행렬의 원소별 상태를 보여주는 그림"></canvas>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--a);opacity:.5"></i>A 조각 (세로 4칸, 한 번 이상 읽음)</span>
+        <span><i class="sw" style="background:var(--b);opacity:.5"></i>B 조각 (가로 4칸)</span>
+        <span><i class="sw" style="background:var(--mem)"></i>붉을수록 여러 번 다시 읽음 (확대하면 칸에 읽은 횟수가 숫자로 표시)</span>
+        <span><i class="sw" style="border:2px solid var(--hit)"></i>지금 버퍼에 들어 있음</span>
+        <span><i class="sw" style="background:var(--psum);opacity:.6"></i>누산 중인 타일 (4×4)</span><span><i class="sw" style="border:2px solid var(--psum);background:none"></i>psum 메모리에 보관 중 (K 묶음)</span>
+        <span><i class="sw" style="background:var(--ink);opacity:.55"></i>완성된 타일</span>
+        <span><i class="sw" style="background:var(--grid);opacity:.45;outline:1px dashed var(--mute)"></i>옅은 칸 = 마스크로 꺼진 자리 (4로 안 나눠떨어질 때)</span>
+      </div>
+    </div>
+
+    <div class="panel side" aria-live="off">
+      <div>
+        <h3 id="modeName">Set 2 방식</h3>
+        <div class="small mute" id="modeDesc"></div>
+      </div>
+      <div class="kv">
+        <span>진행한 MAC 연산</span><span class="v" id="vStep"></span>
+        <span>완성된 타일</span><span class="v" id="vDone"></span>
+        <span>이번 단계</span><span class="v" id="vNow"></span>
+        <span>지금까지 메모리 읽기</span><span class="v" id="vReads"></span>
+        <span class="srcHead">조각을 가져온 곳: 메모리 / 버퍼 / staging</span>
+        <span>A</span><span class="v src" id="vSrcA"></span>
+        <span>B</span><span class="v src" id="vSrcB"></span>
+      </div>
+      <div class="meters">
+      <div class="meter"><span id="mAl">A 버퍼</span><div class="track"><div class="fill" id="mA" style="background:var(--a)"></div></div></div>
+      <div class="meter"><span id="mBl">B 버퍼</span><div class="track"><div class="fill" id="mB" style="background:var(--b)"></div></div></div>
+      <div class="meter"><span id="mPl">누산 중인 타일</span><div class="track"><div class="fill" id="mP" style="background:var(--psum)"></div></div></div>
+      </div>
+      <div class="result">
+        <div class="small mute" id="rTitle">끝까지 돌린 결과</div>
+        <div class="kv" style="margin-top:6px">
+          <span>메모리 읽기</span><span class="v" id="rReads"></span>
+          <span>최소 대비</span><span class="v" id="rRatio"></span>
+          <span class="srcHead">조각을 가져온 곳: 메모리 / 버퍼 / staging</span>
+          <span>A</span><span class="v src" id="rSrcA"></span>
+          <span>B</span><span class="v src" id="rSrcB"></span>
+          <span>A 버퍼</span><span class="v" id="rA"></span>
+          <span>B 버퍼</span><span class="v" id="rB"></span>
+          <span>누산 저장 (누산기 / psum)</span><span class="v" id="rAcc"></span>
+        </div>
+        <div style="margin-top:8px" class="small mute">걸리는 시간 (모델 계산)</div>
+        <div class="big" id="rCyc"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel cmp">
+    <div class="small mute" style="margin-bottom:6px" id="cmpTitle">설정별 걸리는 시간 (lat 1). 줄을 누르면 그 설정으로 바뀝니다.</div>
+    <div id="cmp"></div>
+  </div>
+  <div class="panel saved">
+    <div class="savedHead">
+      <span class="small mute">저장한 결과. 줄을 누르면 그 크기와 설정으로 돌아갑니다. 이 브라우저에만 저장됩니다.</span>
+      <span class="acts"><button class="btn primary" id="saveRes" type="button">지금 결과 저장</button><button class="btn" id="clearRes" type="button">모두 지우기</button></span>
+    </div>
+    <div id="savedList"></div>
+  </div>
+  <p class="reading" id="reading"></p>
+  <p class="note">B 버퍼는 실제 하드웨어 크기(KB)로 고릅니다. Set 2는 16 KB, Set 3은 4 KB이고, Set 3의 묶음 크기 G는 1024 / K로 정해집니다. 진행 단계 하나는 MAC 연산 한 번이며, 연산 한 번에 걸리는 시간은 메모리 읽기에 따라 달라서, 64×128×128에서 Set 2는 약 2사이클, 원래 설계는 약 23사이클입니다(모델, lat 1). A 버퍼도 크기로 고릅니다. 한 칸(4바이트)에 A 조각 하나가 들어가며, Set 1~3은 1,024칸(4 KB, 칸마다 zero 플래그 1비트 별도), Memory 팀 슬라이드의 A cache는 128칸(0.5 KB)입니다. 누산기를 B 방향으로 n세트 쓰면 행 타일 n개분(n × K칸)이 필요하고, 모자라면 모자란 만큼 열 타일마다 A를 다시 읽습니다. 오른쪽 패널의 버퍼 크기는 설정한 하드웨어 크기이고, A의 \"필요\"는 그 설정이 실제로 쓰는 양입니다.</p>
+</section>
+
+<!-- 2b -->
+<section id="cases">
+  <div class="q">3 · 바로가기</div>
+  <h2>주의해서 볼 케이스</h2>
+  <p>공동 논의에 필요한 비교 7개만 먼저 보여 줍니다. 모두 A, B 버퍼를 flexible buffer로 둔 경우이고, 순서대로 Set 2 기준점, Set 3, 그 위에 누산기 8세트를 더했을 때의 추가분(K = 128, 512), Compute 팀 Idea 1, 큰 K의 한계와 그 대안인 K 묶음입니다. fixed buffer와 비교하는 카드는 “나머지 케이스”에 있습니다. 누르면 행렬 크기와 방식이 한 번에 설정되고 시뮬레이터로 이동합니다. 메모리 지연 23 카드는 지연 선택도 함께 바뀝니다. 끝난 상태로 열리며, 재생을 누르면 처음부터 다시 돕니다. 시간은 lat 1 기준입니다.</p>
+  <div id="caseList"></div>
+</section>
+
+<footer>
+  <p><b>계산 방식.</b> 모든 설정의 시간을 같은 방식으로 계산합니다. 먼저 이 페이지의 루프 코드로 메모리 읽기 바이트를 세고, 그다음 <code>사이클 = 1.161 × MAC 연산 + (메모리 지연 + 1.76) × 읽기 바이트 + psum 꺼내기·저장</code>을 적용합니다. psum 항은 K 묶음과 완전 k-outer에만 있고, 타일 하나를 꺼내거나 저장할 때 512비트 포트면 1사이클, 32비트 포트면 16사이클로 셉니다. 완전 k-outer는 512비트 포트로 둡니다. 두 계수는 공식 testbench(<code>tb_gemm.sv</code>, Icarus)에서 Set 2/3을 64×128×128로 돌린 결과(메모리 지연 1, 23)에 한 번 맞춘 값이고, 그 결과들과는 0.3% 안쪽으로 맞습니다.</p>
+  <p><b>평가 기준.</b> 공식 평가는 실행 시간(사이클 × 클럭 주기)입니다. 클럭 주기는 아직 정해지지 않아서 이 페이지는 사이클만 비교합니다. 누산 경로를 나누는 등 클럭을 올리는 변경의 효과는 여기에 나타나지 않습니다.</p>
+  <p><b>검증과 한계.</b> 읽기 바이트는 공식 testbench 크기 7개에서 원래 설계와 Set 1, Set 2의 실측 읽기와 정확히 일치합니다. 시간은 실측보다 원래 설계와 Set 1 같은 로더에서 약 11~13%, 아주 작은 행렬에서는 고정 오버헤드만큼 짧게 나옵니다. 모든 설정이 같은 식을 쓰므로 설정끼리의 비교는 일관되지만, 절대 사이클은 실측과 다를 수 있습니다. psum 꺼내기·저장은 MAC과 겹치지 않는다고 가정해 그대로 더하므로, 이중 버퍼로 겹칠 수 있다면 K 묶음과 k-outer의 시간은 상한입니다. psum의 BRAM36 개수는 포트 폭으로 정해집니다(512비트는 깊이 512마다 8개, 32비트는 1,024워드마다 1개). zero skip(희소 데이터), 결과 쓰기 대기, k-outer와 K 묶음의 마지막 결과 배출은 모델에 없고, K 묶음은 실측으로 검증하지 않았습니다.</p>
+</footer>
+</div>
+
+<script>
+(()=>{
+"use strict";
+
+/* ---------- loop + buffer model (same order as gemm_control: row tile -> col tile -> kk) ---------- */
+// One step = one op: A column slice (4 rows at k) x B row slice (k, 4 cols) -> 16 accumulators.
+function simulate(cfg,M,N,K,st,fast){
+  const R=Math.ceil(M/4), C=Math.ceil(N/4);
+  cfg=resolve(cfg,K,R,C); // sets up st immediately, returns a step-by-step iterator
+  const capBslices=cfg.bKB==='all'?C*K:Math.min(C*K,usable(cfg.bKB*256,!!cfg.bFixed,K)); // one 32-bit entry = one B slice
+  const inA=new Int32Array(R*K).fill(-1), inB=new Int32Array(C*K).fill(-1);
+  let genA=0,genB=0,occA=0,occB=0,scA=-1,scB=-1,blk=0;
+  const hold=!!cfg.kOuter||cfg.acc>1; // loader keeps the slices of the current k block only when it pairs them with several ops
+  const heldA=new Int32Array(R*K).fill(-1), heldB=new Int32Array(C*K).fill(-1);
+  const pinA=new Uint8Array(R*K); let pinRows=0,pinCnt=0,capWork=0; // A keep policy: first rows stay for the whole GEMM
+  Object.assign(st,{R,C,K,inA,inB,pinA,readsA:0,readsB:0,bufA:0,bufB:0,stgA:0,stgB:0,n:0,cntA:new Uint16Array(R*K),cntB:new Uint16Array(C*K),
+    prog:new Uint16Array(R*C),inProg:0,done:0,genA:0,genB:0,occA:0,occB:0,cur:null,G:C});
+  function step(r,c,k,sa,useA,capA,sb,useB,capB){
+    const ia=r*K+k, ib=c*K+k, ba=Math.min(4,M-4*r), bb=Math.min(4,N-4*c); let fa=0,fb=0,srcA,srcB;
+    // where each slice comes from: staging register (same k block, already held) -> buffer -> memory
+    if(useA&&sa!==scA){scA=sa;genA++;occA=0;}
+    if(hold&&heldA[ia]===blk){srcA='stg';st.stgA+=ba;}
+    else if(useA&&(inA[ia]===genA||pinA[ia])){srcA='buf';st.bufA+=ba;}
+    else{srcA='mem';fa=1;st.readsA+=ba;st.cntA[ia]++;
+      if(useA){if(r<pinRows){pinA[ia]=1;pinCnt++;}else if(occA<capA){inA[ia]=genA;occA++;}}}
+    heldA[ia]=blk;
+    if(useB&&sb!==scB){scB=sb;genB++;occB=0;}
+    if(hold&&heldB[ib]===blk){srcB='stg';st.stgB+=bb;}
+    else if(useB&&inB[ib]===genB){srcB='buf';st.bufB+=bb;}
+    else{srcB='mem';fb=1;st.readsB+=bb;st.cntB[ib]++;if(useB&&occB<capB){inB[ib]=genB;occB++;}}
+    heldB[ib]=blk;
+    const t=r*C+c, p=st.prog[t];
+    if(p===0)st.inProg++;
+    st.prog[t]=p+1;
+    if(p+1===K){st.inProg--;st.done++;}
+    st.genA=genA;st.genB=genB;st.occA=occA+pinCnt;st.occB=occB;
+    st.cur={r,c,k,fa,fb,srcA,srcB}; st.n++;
+  }
+  if(cfg.kBlock){
+    // K blocking: output block BH x BW tiles, K cut into chunks of Kc; partial sums go to psum memory between chunks.
+    const BH=Math.min(R,cfg.bh), BW=Math.min(C,cfg.bw), KC=Math.min(K,cfg.kc), nCh=Math.ceil(K/KC);
+    let {na,nb}=split(cfg,R,C); na=Math.min(na,BW); nb=Math.min(nb,BH);
+    Object.assign(st,{capA:BH*KC,capB:BW*KC,capP:BH*BW,G:C,BH,BW,KC,psumTiles:0,inPsum:0,act:null});
+    return (function*(){let id=0;
+      for(let rb=0;rb<R;rb+=BH)for(let cb=0;cb<C;cb+=BW)for(let ch=0;ch<nCh;ch++){id++;
+        const k0=ch*KC, k1=Math.min(K,k0+KC), re=Math.min(R,rb+BH), ce=Math.min(C,cb+BW);
+        for(let rg=rb;rg<re;rg+=nb)for(let cg=cb;cg<ce;cg+=na){
+          const r1=Math.min(re,rg+nb), c1=Math.min(ce,cg+na), tiles=(r1-rg)*(c1-cg);
+          st.act={r0:rg,r1,c0:cg,c1};
+          if(ch>0){st.psumTiles+=tiles;st.inPsum-=tiles;}            // load partial sums into the accumulators
+          for(let k=k0;k<k1;k++){blk++;
+            for(let r=rg;r<r1;r++)for(let c=cg;c<c1;c++){step(r,c,k,id,true,BH*KC,id,true,BW*KC);if(!fast)yield;}}
+          if(ch<nCh-1){st.psumTiles+=tiles;st.inPsum+=tiles;}       // store them back
+        }}
+      st.act=null;
+    })();
+  }
+  if(cfg.kOuter){
+    st.capA=1; st.capB=C; st.capP=R*C;
+    return (function*(){for(let k=0;k<K;k++)for(let r=0;r<R;r++){blk++;for(let c=0;c<C;c++){step(r,c,k,0,false,0,k,true,C);if(!fast)yield;}}})();
+  }
+  // nb row tiles share one B slice (B_reuse), na col tiles share one A slice (A_reuse); na*nb accumulator sets.
+  const {na,nb}=split(cfg,R,C), G0=Math.floor(capBslices/K), grouped=!!cfg.group&&R>1&&G0>=2&&G0<C /* Set 3 RTL SETUP: one group if m <= PE_ROWS, G < 2 or G >= ntiles */, G=grouped?G0:C, ng=Math.ceil(C/G);
+  const usableA=cfg.aKB?usable(cfg.aKB*256,!!cfg.aFixed,K):0;
+  const capA=Math.min(nb*K,usableA); // working area for the current row group; one 32-bit entry = one A slice, no eviction
+  pinRows=!cfg.aFixed&&usableA>=nb*K?Math.floor((usableA-nb*K)/K):0; // leftover whole row tiles are kept across groups
+  st.capA=capA+pinRows*K; st.capB=capBslices; st.pinRows=pinRows; st.capP=Math.min(na,C)*Math.min(nb,R); st.G=G;
+  return (function*(){
+    for(let g=0;g<ng;g++){const ce=Math.min(C,(g+1)*G);
+      for(let rg=0;rg<R;rg+=nb)for(let cg=g*G;cg<ce;cg+=na)for(let k=0;k<K;k++){blk++;
+        for(let r=rg;r<Math.min(R,rg+nb);r++)for(let c=cg;c<Math.min(ce,cg+na);c++){step(r,c,k,g*R+rg,!!cfg.aKB,capA,grouped?g:0,capBslices>0,capBslices);if(!fast)yield;}}}
+  })();
+}
+// "auto" banks (agreement design): use as many B-direction banks as the A buffer can feed (A entries / K, at most 8);
+// when only one fits, fall back to the group loop if it is enabled.
+// Usable entries of a buffer for this K.
+// Packed: tiles are stored back to back (address = tile x K + k), so every entry is usable.
+// Fixed slot: each tile gets a slot sized for the largest K (1024 entries; a smaller buffer is one slot),
+// so a short K leaves the rest of each slot empty.
+function usable(entries,fixed,K){
+  if(!fixed||!entries)return entries;
+  const slot=Math.min(1024,entries), slots=Math.floor(entries/slot);
+  return slots*Math.min(K,slot);
+}
+// "auto" = 8 accumulator sets built, used per K: at SETUP pick whichever reads less,
+// (a) B-direction accumulators (as many row tiles as the A buffer can feed, up to 8) or (b) the group loop with one set.
+function groupSlices(cfg,K,R,C,uA,capB){
+  const G0=Math.floor(capB/K);
+  if(cfg.group&&R>1&&G0>=2&&G0<C){const ng=Math.ceil(C/G0),pin=!cfg.aFixed?Math.max(0,Math.floor(uA/K)-1):0;return R*K+(ng-1)*Math.max(0,R-pin)*K+C*K;}
+  return R*K+C*K+(R-1)*(C*K-capB);
+}
+function resolve(cfg,K,R,C){
+  if(cfg.acc!=='auto')return cfg;
+  if(cfg.kBlock)return {...cfg,acc:1};
+  const uA=cfg.aKB?usable(cfg.aKB*256,!!cfg.aFixed,K):0;
+  const capB=cfg.bKB==='all'?C*K:Math.min(C*K,usable(cfg.bKB*256,!!cfg.bFixed,K));
+  const nb=Math.max(1,Math.min(8,R,Math.floor(uA/K)));
+  if(nb>1){
+    const accSlices=R*K+C*K+(Math.ceil(R/nb)-1)*(C*K-capB);
+    if(accSlices<groupSlices(cfg,K,R,C,uA,capB))return {...cfg,acc:nb,dir:'b',group:0};
+  }
+  return {...cfg,acc:1,dir:'b'};
+}
+function split(cfg,R,C){
+  const n=cfg.acc; let d=cfg.dir||'b';
+  if(n===1)return {na:1,nb:1,d:'b'};
+  if(d==='auto'){ // Compute slides, Idea 1: few rows -> A reuse, many rows -> B reuse (pick the one that removes more reads)
+    const costA=R*(cfg.aKB?1:Math.ceil(C/n))+C*R, costB=R*(cfg.aKB?1:C)+C*Math.ceil(R/n);
+    d=costA<costB?'a':'b';
+  }
+  if(d==='b')return {na:1,nb:n,d};
+  if(d==='a')return {na:n,nb:1,d};
+  const na=2**Math.floor(Math.log2(n)/2);return {na,nb:n/na,d};
+}
+function runAll(cfg,M,N,K){const st={};simulate(cfg,M,N,K,st,true).next();return st;}
+
+const key=c=>c.kOuter?'1':c.kBlock?`2|${c.bh}|${c.bw}|${c.kc}|${c.psumW}|${c.acc}`+(c.acc!==1?'|'+(c.dir||'b'):''):`0|${c.aKB}|${c.bKB}|${c.group}|${c.acc}`+(c.acc!==1?'|'+(c.dir||'b'):'')+(c.aFixed?'|af':'')+(c.bFixed?'|bf':'');
+// One formula for every configuration: each MAC op costs 1.161 cycles and each read byte costs (latency + 1.76) cycles.
+// Coefficients were fitted once to the Set 2/3 runs of the official testbench (64x128x128, latency 1 and 23).
+const est=(ops,bytes,L)=>1.1613*ops+(L+1.76)*bytes;
+const memo=new Map();
+function result(cfg,M,N,K,L){
+  const id=key(cfg)+'@'+[M,N,K,L].join('x');
+  if(memo.has(id))return memo.get(id);
+  const st=runAll(cfg,M,N,K), R=Math.ceil(M/4), C=Math.ceil(N/4), ops=R*C*K, bytes=st.readsA+st.readsB, min=(M+N)*K;
+  // hardware sizes: A/B buffers as configured, accumulators as built (k-outer psum is sized for MAX_M x MAX_N)
+  let aHW=0,bHW=0,aNeed=0,accBytes;
+  let aTiles=0,bTiles=0,psumBytes=0,psumTiles=0,psumW=0,psumBram=0;
+  const bram36=(bytes,w)=>w===512?8*Math.ceil(bytes/64/512):Math.ceil(bytes/4/1024); // 512-bit: 8 x (512 x 72) per 512 tiles; 32-bit: 1024 x 36 per BRAM36
+  if(cfg.kBlock){const BH=Math.min(R,cfg.bh),BW=Math.min(C,cfg.bw),KC=Math.min(K,cfg.kc);
+    aHW=BH*4*KC; bHW=KC*BW*4; aTiles=BH; bTiles=BW; accBytes=cfg.acc*64; psumW=cfg.psumW;
+    psumTiles=st.psumTiles; psumBytes=psumTiles?BH*BW*64:0; psumBram=psumBytes?bram36(psumBytes,psumW):0;}
+  else if(cfg.kOuter){aNeed=4;bHW=N;accBytes=0;psumW=512;psumBytes=16*32*64;psumTiles=2*R*C*(K-1);psumBram=bram36(psumBytes,512);}
+  else{const rc=resolve(cfg,K,R,C),{nb}=split(rc,R,C);
+    aTiles=Math.floor(usable((cfg.aKB||0)*256,!!cfg.aFixed,K)/K);
+    bTiles=cfg.bKB==='all'?C:Math.floor(usable(cfg.bKB*256,!!cfg.bFixed,K)/K);
+    aHW=(cfg.aKB||0)*1024; aNeed=cfg.aKB?Math.min(nb,R)*K*4:0;
+    bHW=cfg.bKB==='all'?K*N:cfg.bKB*1024;
+    accBytes=(cfg.acc==='auto'?8:cfg.acc)*64;}
+  const psumCyc=psumW===512?psumTiles:psumTiles*16;
+  const cyc=est(ops,bytes,L)+psumCyc;
+  const r={psumBytes,psumTiles,psumCyc,psumW,psumBram,bytes,readsA:st.readsA,readsB:st.readsB,bufA:st.bufA,bufB:st.bufB,stgA:st.stgA,stgB:st.stgB,ratio:bytes/min,aHW,bHW,aNeed,aTiles,bTiles,accBytes,cyc};
+  memo.set(id,r);return r;
+}
+
+/* ---------- presets ---------- */
+const base={kOuter:0,aKB:4,bKB:0,group:0,acc:1,dir:'b',aFixed:0,bFixed:0,kBlock:0,bh:8,bw:8,kc:64,psumW:32}; // A and B flexible (flexible A keeps leading row tiles in its spare entries); aFixed:1 for comparison
+const S3={...base,bKB:4,group:1};
+const PRESETS=[
+  {name:'원래 설계',sub:'버퍼 없음',cfg:{...base,aKB:0},desc:'필요할 때마다 메모리에서 새로 읽습니다. A 조각은 열 타일마다, B 조각은 행 타일마다 다시 읽습니다.'},
+  {name:'Set 1',sub:'A 버퍼만',cfg:{...base},desc:'A 버퍼가 행 타일 하나의 A를 들고 있어서 A는 한 번만 읽습니다. B는 여전히 행 타일마다 다시 읽습니다.'},
+  {name:'Set 2',sub:'A + B 16 KB',cfg:{...base,bKB:16},desc:'첫 행 타일을 도는 동안 B를 16 KB 버퍼에 담고, 나머지 행 타일은 버퍼에서 꺼내 씁니다. B가 16 KB 이하면 모든 원소를 딱 한 번 읽습니다.'},
+  {name:'Set 3',sub:'B 4 KB + 그룹 루프',cfg:S3,desc:'열 타일을 4 KB 버퍼에 들어가는 G개씩 묶고(G = 1024 / K), 묶음 하나를 모든 행 타일이 다 쓴 다음 다음 묶음으로 넘어갑니다. A 버퍼의 남는 칸에는 앞쪽 행 타일을 끝까지 남겨 두어, 묶음이 바뀔 때 그만큼 A를 다시 읽지 않습니다.'},
+  {name:'Set 3 + 누산기 8세트',sub:'K마다 유리한 쪽 사용',cfg:{...S3,acc:'auto'},desc:'Set 3에 누산기 8세트를 더합니다. 시작할 때 K를 보고, B 방향 누산기(A 버퍼가 받쳐 주는 만큼)와 그룹 루프 중 덜 읽는 쪽을 씁니다. 그래서 어떤 K에서도 Set 3보다 느리지 않습니다.'},
+  {name:'ACC 복제 단독',sub:'버퍼 없음 + 누산기 4세트 (Idea 1)',cfg:{...base,aKB:0,acc:4,dir:'auto'},desc:'Compute 팀 슬라이드의 Idea 1입니다. 입력 버퍼 없이 누산기를 4세트 두고, 행렬 모양에 따라 행이 적으면 A 방향, 많으면 B 방향으로 복제합니다. 읽기는 공유되는 피연산자 쪽만 1/4로 줄어듭니다.'},
+  {name:'완전 k-outer',sub:'모든 타일의 중간 합',cfg:{...base,kOuter:1,aKB:0},desc:'k 한 단계를 모든 타일에 더한 뒤 다음 k로 넘어갑니다. A, B 조각은 그 단계에서 다 쓰고 나면 다시 필요 없으므로 입력 버퍼가 거의 필요 없는 대신, 모든 타일의 중간 합(psum 32 KB)을 들고 있어야 합니다. psum은 타일마다 k 단계마다 꺼내고 저장하며(512비트 포트, 1사이클씩), 마지막 결과 배출은 모델에 없습니다.'},
+  {name:'K 묶음',sub:'출력 블록 32×32 · Kc 64',cfg:{...base,aKB:0,kBlock:1,bh:8,bw:8,kc:64,psumW:32},desc:'출력을 행 타일 8개 × 열 타일 8개(32×32) 블록으로 나누고, 블록마다 K를 64씩 끊어 누산합니다. 묶음 하나의 A(2 KB)와 B(2 KB)를 청크 버퍼에 담아 블록 안에서 다시 쓰고, 묶음 사이의 중간 합은 psum 메모리(4 KB, 32비트 포트)에 넣었다 꺼냅니다. 재사용이 K와 상관없이 블록 크기로 정해집니다.'}
+];
+
+/* ---------- state ---------- */
+const $=id=>document.getElementById(id);
+let M=32,N=64,K=8,LAT=1, cfg={...PRESETS[2].cfg}, gen=null, st={}, playing=false, acc=0, lastT=0;
+const total=()=>Math.ceil(M/4)*Math.ceil(N/4)*K;
+const presetIndex=c=>PRESETS.findIndex(p=>key(p.cfg)===key(c));
+function computePresets(){PRESETS.forEach(p=>p.res=result(p.cfg,M,N,K,LAT));}
+function rebuild(){st={};gen=simulate(cfg,M,N,K,st);}
+function advanceTo(n){
+  n=Math.max(0,Math.min(total(),n));
+  if(n<st.n)rebuild();
+  while(st.n<n){if(gen.next().done)break;}
+}
+function setCfg(c){activeCase=-1;if(typeof renderCases==='function'&&$('caseList').children.length)renderCases();cfg={...c};syncControls();rebuild();stop();advanceTo(total());renderSide();renderCmp();draw();if(typeof renderSaved==='function')renderSaved();}
+function setSize(m,n,k,l){
+  const cl=(v,hi,d)=>{v=Math.round(+v);return Number.isFinite(v)&&v>=1?Math.min(hi,v):d;};
+  M=cl(m,64,M);N=cl(n,128,N);K=cl(k,1024,K);view.fit=true;view.ox=view.oy=0;if(l)LAT=+l;$('sM').value=M;$('sN').value=N;$('sK').value=K;$('sL').value=LAT;
+  stop();computePresets();rebuild();advanceTo(total());layout();renderSide();renderCmp();draw();if(typeof syncCase==='function')syncCase();if(typeof renderSaved==='function'&&$('savedList').childNodes.length)renderSaved();
+}
+
+/* ---------- controls ---------- */
+const pre=$('presets');
+PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.className='pbtn';
+  b.innerHTML=`${p.name}<small>${p.sub}</small>`;b.onclick=()=>setCfg(p.cfg);pre.appendChild(b);});
+const ctl={o:$('cOrder'),a:$('cA'),b:$('cB'),g:$('cG'),n:$('cAcc'),d:$('cDir'),af:$('cAF'),bf:$('cBF'),bh:$('cBH'),bw:$('cBW'),kc:$('cKc'),pw:$('cPW')};
+function syncControls(){
+  ctl.o.value=cfg.kBlock?2:cfg.kOuter;ctl.bh.value=String(cfg.bh);ctl.bw.value=String(cfg.bw);ctl.kc.value=String(cfg.kc);ctl.pw.value=String(cfg.psumW);ctl.a.value=String(cfg.aKB);ctl.b.value=String(cfg.bKB);ctl.g.value=cfg.group;ctl.n.value=String(cfg.acc);ctl.d.value=cfg.dir||'b';ctl.af.value=cfg.aFixed?1:0;ctl.bf.value=cfg.bFixed?1:0;ctl.af.disabled=!!cfg.kOuter||!cfg.aKB;ctl.bf.disabled=!!cfg.kOuter||!cfg.bKB||cfg.bKB==='all';
+  const ko=!!cfg.kOuter, kb=!!cfg.kBlock;[ctl.a,ctl.b,ctl.g].forEach(e=>e.disabled=ko||kb);ctl.n.disabled=ko;ctl.d.disabled=ko||cfg.acc===1||cfg.acc==='auto';
+  if(kb){ctl.af.disabled=ctl.bf.disabled=true;}
+  [ctl.bh,ctl.bw,ctl.kc,ctl.pw].forEach(e=>e.disabled=!kb);
+  ctl.n.querySelector('option[value="auto"]').disabled=kb;
+  const i=presetIndex(cfg);[...pre.children].forEach((b,j)=>b.classList.toggle('on',j===i));
+}
+Object.values(ctl).forEach(e=>e.addEventListener('change',()=>{
+  const o=+ctl.o.value, kb=o===2?1:0;
+  let accV=ctl.n.value==='auto'?'auto':+ctl.n.value; if(kb&&accV==='auto')accV=1;
+  setCfg({kOuter:o===1?1:0,kBlock:kb,aKB:kb?0:+ctl.a.value,bKB:kb?0:(ctl.b.value==='all'?'all':+ctl.b.value),group:kb?0:+ctl.g.value,acc:accV,dir:ctl.d.value,aFixed:kb?0:+ctl.af.value,bFixed:kb?0:+ctl.bf.value,
+    bh:+ctl.bh.value,bw:+ctl.bw.value,kc:+ctl.kc.value,psumW:+ctl.pw.value});
+}));
+// Official tb_gemm.sv cases: [name, M, N, K, memory latency]
+const TB_CASES=[["scalar",1,1,1,1],["rectangular",3,7,5,1],["identity",3,8,8,1],["k_one",4,9,1,1],["n_one",5,1,11,1],["all_zero",3,7,5,1],["max_positive",2,5,31,1],["max_negative",2,5,31,1],["sparse_90",4,9,13,1],["periodic_stalls",3,7,5,3],["random_stalls",5,11,17,2],["restart",3,7,5,1],["long_k",1,5,1024,1],["wide_n",2,128,3,1],["tall_m",64,3,2,1],["random_0",6,12,1,1],["random_1",7,16,30,1],["random_2",7,16,13,1],["random_3",1,8,13,1],["random_4",3,7,28,1],["dense_benchmark",16,16,64,1],["sparse_benchmark",16,16,64,1],["zero_boundaries",5,7,9,1],["zero_k_one",5,7,1,1],["long_latency",3,5,11,23],["positive_long_k",1,1,1024,1],["negative_long_k",1,1,1024,1],["max_dimensions",64,128,1024,1],["extended_0",8,17,60,6],["extended_1",11,10,46,6],["extended_2",9,12,22,3],["extended_3",3,5,46,2],["extended_4",8,19,47,2],["extended_5",3,9,39,3],["extended_6",8,9,50,4],["extended_7",8,19,19,6],["extended_8",9,14,64,1],["extended_9",12,14,27,6],["extended_10",11,18,37,4],["extended_11",2,15,16,2],["bench64",64,64,64,1],["bench64_lat23",64,64,64,23],["bench64_sp90",64,64,64,1],["bench_64x128x128",64,128,128,1],["bench_64x128x128_l23",64,128,128,23]];
+const SPARSE=/sparse|zero|identity/;
+TB_CASES.forEach((c,i)=>{const o=document.createElement('option');o.value=i;
+  o.textContent=`${c[0]} · ${c[1]}×${c[2]}×${c[3]}${c[4]>1?` · 지연 ${c[4]}`:''}${SPARSE.test(c[0])?' · 0이 많은 데이터':''}`;$('sCase').appendChild(o);});
+$('sCase').addEventListener('change',e=>{const c=TB_CASES[+e.target.value];if(c)setSize(c[1],c[2],c[3],c[4]);});
+function syncCase(){ // keep the dropdown on the chosen case, or show "직접 입력" when the size no longer matches
+  const sel=$('sCase'), cur=TB_CASES[+sel.value], same=c=>c&&c[1]===M&&c[2]===N&&c[3]===K&&c[4]===LAT;
+  if(sel.value!==''&&same(cur))return;
+  const i=TB_CASES.findIndex(same);sel.value=i<0?'':String(i);
+}
+['sM','sN','sK','sL'].forEach(id=>$(id).addEventListener('change',()=>setSize(+$('sM').value,+$('sN').value,+$('sK').value,+$('sL').value)));
+$('szSmall').onclick=()=>setSize(32,64,8,1);
+$('szBench').onclick=()=>setSize(64,128,128,1);
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function stop(){playing=false;$('play').textContent='▶ 재생';}
+$('play').onclick=()=>{
+  if(playing){stop();return;}
+  if(st.n>=total())advanceTo(0);
+  playing=true;$('play').textContent='⏸ 멈춤';lastT=performance.now();acc=0;requestAnimationFrame(tick);
+};
+const redraw=()=>{renderSide();view.pending=true;draw();}; // only playback and stepping move the view
+$('stepF').onclick=()=>{stop();advanceTo(st.n+1);redraw();};
+$('stepB').onclick=()=>{stop();advanceTo(st.n-1);redraw();};
+$('reset').onclick=()=>{stop();advanceTo(0);redraw();};
+$('toEnd').onclick=()=>{stop();advanceTo(total());redraw();};
+function tick(t){
+  if(!playing)return;
+  acc+=(t-lastT)/1000*(+$('speed').value);lastT=t;
+  const k=Math.floor(acc);
+  if(k>0){acc-=k;advanceTo(st.n+k);redraw();}
+  if(st.n>=total()){stop();return;}
+  requestAnimationFrame(tick);
+}
+
+/* ---------- side panel ---------- */
+const fmt=n=>Math.round(n).toLocaleString('ko-KR');
+const kb=b=>b>=1024?(b/1024).toFixed(b>=10240?1:2).replace(/\.?0+$/,'')+' KB':Math.round(b)+' B';
+function renderSide(){
+  const i=presetIndex(cfg), p=PRESETS[i], R=Math.ceil(M/4), C=Math.ceil(N/4);
+  $('szInfo').textContent=`타일 ${R}×${C} = ${fmt(R*C)}개 · ${fmt(total())}단계 · A ${kb(M*K)}, B ${kb(K*N)}`;
+  $('modeName').textContent=p?p.name:'직접 조합';
+  $('modeDesc').textContent=p?p.desc:describe(cfg);
+  $('vStep').textContent=`${fmt(st.n)} / ${fmt(total())}`;
+  $('vDone').textContent=`${fmt(st.done)} / ${fmt(R*C)}`;
+  const cu=st.cur;
+  const srcL={mem:'메모리',buf:'버퍼',stg:'staging'};
+  $('vNow').innerHTML=cu?`A <span style="color:${cu.fa?'var(--mem)':'var(--hit)'}">${srcL[cu.srcA]}</span> · B <span style="color:${cu.fb?'var(--mem)':'var(--hit)'}">${srcL[cu.srcB]}</span>`:'—';
+  $('vReads').textContent=fmt(st.readsA+st.readsB)+' B';
+  const src3=(m,b,g)=>`${fmt(m)} / ${fmt(b)} / ${fmt(g)} B`;
+  $('vSrcA').textContent=src3(st.readsA,st.bufA,st.stgA);
+  $('vSrcB').textContent=src3(st.readsB,st.bufB,st.stgB);
+  const pct=(a,b)=>b?Math.min(100,a/b*100):0;
+  $('mAl').textContent=cfg.kOuter?'A: 조각 1개를 레지스터에 유지':cfg.kBlock?`A 청크 조각 ${st.occA} / ${st.capA}개`:`A 버퍼 ${st.capA?`조각 ${st.occA} / ${st.capA}개`:'없음'}`;
+  $('mA').style.width=(cfg.kOuter?0:pct(st.occA,st.capA))+'%';
+  $('mBl').textContent=cfg.kBlock?`B 청크 조각 ${st.occB} / ${st.capB}개`:cfg.kOuter?`B: k번째 행 조각 ${st.occB} / ${C}개`:`B 버퍼 ${st.capB?`조각 ${st.occB} / ${st.capB}개`:'없음'}`;
+  $('mB').style.width=pct(st.occB,st.capB)+'%';
+  if(cfg.kBlock){$('mPl').textContent=`psum 보관 타일 ${st.inPsum} / ${st.capP}개`;$('mP').style.width=pct(st.inPsum,st.capP)+'%';}
+  else{$('mPl').textContent=`누산 중인 타일 ${st.inProg} / 최대 ${st.capP}개`;$('mP').style.width=pct(st.inProg,R*C)+'%';}
+  const r=p?p.res:result(cfg,M,N,K,LAT);
+  $('rTitle').textContent=`끝까지 돌린 결과 (${M}×${N}×${K}, 지연 ${LAT})`;
+  $('rReads').textContent=fmt(r.bytes)+' B';
+  $('rRatio').textContent=r.ratio.toFixed(r.ratio<10?2:1)+'×';
+  $('rSrcA').textContent=src3(r.readsA,r.bufA,r.stgA);
+  $('rSrcB').textContent=src3(r.readsB,r.bufB,r.stgB);
+  const psumT=r.psumBytes?`psum ${kb(r.psumBytes)} (${r.psumW}비트 포트, BRAM36 ${r.psumBram}개) · 꺼내기·저장 ${fmt(r.psumTiles)}회 = ${fmt(r.psumCyc)}사이클`:'psum 없음 (Kc = K)';
+  $('rA').textContent=cfg.kBlock?`A 청크 ${kb(r.aHW)} · 행 타일 ${r.aTiles}개 × Kc`:cfg.kOuter?'레지스터 4 B':(r.aHW?`${kb(r.aHW)} ${cfg.aFixed?'fixed':'flexible'} · 행 타일 ${r.aTiles}개분 / 필요 ${kb(r.aNeed)}`:'없음');
+  $('rB').textContent=cfg.kBlock?`B 청크 ${kb(r.bHW)} · 열 타일 ${r.bTiles}개 × Kc`:cfg.kOuter?`k번째 행 ${kb(r.bHW)}`:(r.bHW?`${kb(r.bHW)} ${cfg.bKB==='all'?'':cfg.bFixed?'fixed · ':'flexible · '}열 타일 ${r.bTiles}개분`:'없음');
+  $('rAcc').textContent=cfg.kBlock?`누산기 ${kb(r.accBytes)} + ${psumT}`:cfg.kOuter?psumT:kb(r.accBytes);
+  $('rCyc').textContent=fmt(r.cyc)+' cycles';
+  $('reading').textContent=reading(cfg,r);
+}
+function describe(c){
+  if(c.kOuter)return PRESETS.find(p=>p.cfg.kOuter).desc;
+  if(c.kBlock){const R=Math.ceil(M/4),C=Math.ceil(N/4),BH=Math.min(R,c.bh),BW=Math.min(C,c.bw),KC=Math.min(K,c.kc),{na,nb}=split(c,R,C);
+    return `K 묶음: 출력 블록 행 타일 ${BH}개 × 열 타일 ${BW}개(${BH*4}×${BW*4}), K를 ${KC}씩 ${Math.ceil(K/KC)}묶음으로 끊어 누산합니다. A 청크 ${kb(BH*4*KC)}, B 청크 ${kb(KC*BW*4)}, psum ${Math.ceil(K/KC)>1?kb(BH*BW*64)+' ('+c.psumW+'비트 포트)':'없음'}, 누산기 ${c.acc}세트${c.acc>1?` (A_reuse ${Math.min(na,BW)} × B_reuse ${Math.min(nb,BH)})`:''}.`;}
+  const f=c.bKB==='all'?'B 전부':c.bKB?c.bKB+' KB':'없음';
+  const rc=resolve(c,K,Math.ceil(M/4),Math.ceil(N/4)), {na,nb}=split(rc,Math.ceil(M/4),Math.ceil(N/4));
+  const accT=c.acc==='auto'?`누산기 8세트 중 ${rc.acc}세트 사용 (K = ${K})${rc.acc===1?(rc.group?', 이 K에서는 그룹 루프가 유리':', 이 K에서는 누산기를 쓰지 않음'):''}`:`누산기 ${c.acc}세트`+(c.acc>1?` (A_reuse ${na} × B_reuse ${nb})`:'');
+  return `A 버퍼 ${c.aKB?c.aKB+' KB':'없음'}, B 버퍼 ${f}, ${c.group&&c.acc!=='auto'?'그룹 루프':c.acc==='auto'?'':'순서 그대로'}`.replace(/, $/,'')+`, ${accT}.`;
+}
+function reading(c,r){
+  const best=PRESETS[2].res, isS2=key(c)===key(PRESETS[2].cfg);
+  if(c.kBlock)return '재생해 보면 점선으로 나뉜 블록 하나 안에서 묶음(Kc) 단위로 진행합니다. 묶음이 끝난 타일은 보라 테두리로 psum 메모리에 들어가고, 다음 묶음에서 꺼내 이어서 누산합니다. A, B 숫자는 각각 열 블록 수, 행 블록 수만큼만 올라갑니다.';
+  if(c.kOuter)return '재생해 보면 모든 타일이 한꺼번에 조금씩 차오르고(모든 타일의 중간 합을 동시에 보관), 각 k 단계가 끝나면 그 단계의 A, B 조각은 다시 쓰이지 않습니다. 저장 공간을 입력 대신 출력 쪽에 써서 최소 읽기에 도달합니다.';
+  if(r.ratio<1.0005)return isS2?'재생해 보면 첫 행 타일을 도는 동안 B 조각에 모두 초록 테두리(버퍼 안)가 생기고, 그 뒤로는 A, B 모두 숫자가 1에서 더 오르지 않습니다. 이것이 최소 읽기입니다.'
+    :'이 크기에서는 이 설정도 최소 읽기에 도달합니다. 붉은 조각이 없는지 확인해 보세요.';
+  if(isS2)return 'B가 16 KB를 넘어서 Set 2도 B를 다시 읽습니다. 붉은 B 조각이 버퍼에 남지 못한 부분입니다.';
+  const d=r.cyc/best.cyc;
+  if(d<0.995)return `이 설정은 Set 2보다 ${(1/d).toFixed(2)}배 빠릅니다. 붉게 변한 조각이 다시 읽은 것이고, 숫자는 몇 번 읽었는지입니다.`;
+  if(d<1.005)return '이 설정은 Set 2와 거의 같은 시간이 걸립니다.';
+  return `이 설정은 Set 2보다 ${d.toFixed(2)}배 오래 걸립니다. 붉게 변한 조각이 다시 읽은 것이고, 숫자는 몇 번 읽었는지입니다.`;
+}
+
+/* ---------- comparison bars ---------- */
+function renderCmp(){
+  const max=Math.max(...PRESETS.map(p=>p.res.cyc)), i=presetIndex(cfg);
+  $('cmpTitle').textContent=`설정별 걸리는 시간 (${M}×${N}×${K}, 메모리 지연 ${LAT}). 줄을 누르면 그 설정으로 바뀝니다.`;
+  const f=v=>v>=10000?(v/1000).toFixed(0)+'k':fmt(v);
+  $('cmp').innerHTML=PRESETS.map((p,j)=>`<div class="crow${j===i?' on':''}" data-i="${j}" role="button" tabindex="0"><span>${p.name} <span class="mute small">${p.sub}</span></span><div class="track"><div class="fill" style="width:${(p.res.cyc/max*100).toFixed(2)}%"></div></div><span class="v">${f(p.res.cyc)}</span></div>`).join('');
+  $('cmp').querySelectorAll('.crow').forEach(el=>{
+    const go=()=>setCfg(PRESETS[+el.dataset.i].cfg);
+    el.onclick=go;el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};
+  });
+}
+
+/* ---------- canvas: one square = one element ---------- */
+const cv=$('cv'), g=cv.getContext('2d');
+let geo=null; const tok={};
+function readTokens(){
+  const cs=getComputedStyle(document.documentElement);
+  ['bg','panel','ink','mute','line','grid','a','b','mem','hit','psum','accent','t0','t1','t2','t3'].forEach(k=>tok[k]=cs.getPropertyValue('--'+k).trim());
+}
+// View: s = pixels per element, (ox, oy) = scroll offset of the visible window inside the full drawing.
+const view={s:10,ox:0,oy:0,fit:true,follow:false};
+function tgOf(s){return s>=8?2:s>=3?1:0;}
+function fitScale(w){
+  const nt=Math.ceil(N/4);let s=(w-14-nt*2)/(K+N);
+  if(s<8)s=(w-14-nt*tgOf(s))/(K+N);
+  s=s>=2?Math.floor(s):s;
+  return Math.max(0.4,Math.min(18,s));
+}
+function layout(){
+  const w=cv.clientWidth||600, gap=12, top=22;
+  if(view.fit)view.s=fitScale(w);
+  const s=view.s, tg=tgOf(s);
+  const pos=i=>i*s+Math.floor(i/4)*tg;            // tile rows / tile cols get a small gap
+  const ax=1, cx=ax+K*s+gap, by=top, cy=by+K*s+gap;
+  const CW=cx+pos(N-1)+s+4, CH=cy+pos(M-1)+s+4;
+  const maxH=Math.max(360,Math.round(window.innerHeight*0.8));
+  const h=Math.min(CH,maxH);
+  const dpr=window.devicePixelRatio||1;
+  cv.style.height=h+'px';cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);
+  view.ox=Math.max(0,Math.min(view.ox,CW-w));view.oy=Math.max(0,Math.min(view.oy,CH-h));
+  geo={s,tg,pos,ax,cx,by,cy,w,h,CW,CH,dpr};
+  cv.classList.toggle('pannable',CW>w+1||CH>h+1);
+  $('zoomLabel').textContent=`칸 ${s>=2?Math.round(s):s.toFixed(1)}px${view.fit?' (맞춤)':''}${s<10?' · 확대하면 읽은 횟수 표시':''}`;
+}
+function cells(x,y,nx,ny,color,alpha){ // nx*ny element squares; solid block when cells are tiny
+  const {s}=geo;
+  g.globalAlpha=alpha;g.fillStyle=color;
+  if(s<4){g.fillRect(x,y,nx*s,ny*s);return;}
+  const e=s-1;
+  for(let i=0;i<ny;i++)for(let j=0;j<nx;j++)g.fillRect(x+j*s,y+i*s,e,e);
+}
+function clampRange(lo,hi,n){return [Math.max(0,Math.floor(lo)),Math.min(n-1,Math.ceil(hi))];}
+function draw(){
+  if(!geo)return;
+  const {s,pos,ax,cx,by,cy,w,h,dpr,tg}=geo, R=Math.ceil(M/4), C=Math.ceil(N/4), cu=st.cur;
+  const rA=r=>Math.min(4,M-4*r), cB=c=>Math.min(4,N-4*c), T=4*s+tg;
+  // keep the current tile in view while zoomed in
+  if(cu&&view.follow&&!view.fit&&view.pending){
+    const tx=cx+pos(4*cu.c)+2*s, ty=cy+pos(4*cu.r)+2*s;
+    if(tx<view.ox+20||tx>view.ox+w-20||ty<view.oy+20||ty>view.oy+h-20){
+      view.ox=Math.max(0,Math.min(tx-w/2,geo.CW-w));view.oy=Math.max(0,Math.min(ty-h/2,geo.CH-h));
+    }
+  }
+  view.pending=false;
+  const ox=view.ox, oy=view.oy;
+  g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
+  g.setTransform(dpr,0,0,dpr,-ox*dpr,-oy*dpr);g.globalAlpha=1;
+  const ff=getComputedStyle(document.body).fontFamily;
+  g.font=`500 12px ${ff}`;g.textAlign='left';g.textBaseline='alphabetic';g.fillStyle=tok.mute;
+  g.fillText(`B (${K}×${N})`,cx,by-7);
+  g.fillText(`A (${M}×${K})`,ax,cy-7);
+  const showNum=s>=10;
+  const numFont=`${Math.max(8,Math.min(12,Math.floor(s*0.62)))}px IBM Plex Mono, monospace`;
+  const label=(n,x,y,wd,ht)=>{if(!showNum||!n)return;g.globalAlpha=n>1?1:.75;g.fillStyle=n>1?tok.panel:tok.ink;
+    g.font=numFont;g.textAlign='center';g.textBaseline='middle';g.fillText(n,x+wd/2-.5,y+ht/2);};
+  const outline=(x,y,wd,ht)=>{if(s<4){g.globalAlpha=1;g.strokeStyle=tok.hit;g.lineWidth=1;g.strokeRect(x+.5,y+.5,wd-1,ht-1);return;}
+    g.globalAlpha=1;g.strokeStyle=tok.hit;g.lineWidth=2;g.strokeRect(x+1,y+1,wd-3,ht-3);};
+  // A: slice (r,k) = 4 vertical elements in column k
+  {const [k0,k1]=clampRange((ox-ax)/s,(ox+w-ax)/s,K), [r0,r1]=clampRange((oy-cy)/T,(oy+h-cy)/T,R);
+  for(let r=r0;r<=r1;r++)for(let k=k0;k<=k1;k++){
+    const x=ax+k*s,y=cy+pos(4*r),i=r*K+k,n=st.cntA[i],ra=rA(r);
+    if(ra<4)cells(x,y+ra*s,1,4-ra,tok.grid,.4);
+    cells(x,y,1,ra,tok.grid,1);
+    if(n){cells(x,y,1,ra,tok.a,.45);if(n>1)cells(x,y,1,ra,tok.mem,Math.min(.85,.1+.75*(n-1)/Math.max(1,C-1)));}
+    if(!cfg.kOuter&&((st.inA[i]===st.genA&&st.genA>0)||st.pinA[i]))outline(x,y,s,ra*s);
+    label(n,x,y,s,ra*s);
+  }}
+  // B: slice (c,k) = 4 horizontal elements in row k
+  {const [k0,k1]=clampRange((oy-by)/s,(oy+h-by)/s,K), [c0,c1]=clampRange((ox-cx)/T,(ox+w-cx)/T,C);
+  for(let k=k0;k<=k1;k++)for(let c=c0;c<=c1;c++){
+    const x=cx+pos(4*c),y=by+k*s,i=c*K+k,n=st.cntB[i],cb=cB(c);
+    if(cb<4)cells(x+cb*s,y,4-cb,1,tok.grid,.4);
+    cells(x,y,cb,1,tok.grid,1);
+    if(n){cells(x,y,cb,1,tok.b,.45);if(n>1)cells(x,y,cb,1,tok.mem,Math.min(.85,.1+.75*(n-1)/Math.max(1,R-1)));}
+    if(st.inB[i]===st.genB&&st.genB>0)outline(x,y,cb*s,s);
+    label(n,x,y,cb*s,s);
+  }}
+  // C: tile (r,c) = 4x4 elements
+  {const [r0,r1]=clampRange((oy-cy)/T,(oy+h-cy)/T,R), [c0,c1]=clampRange((ox-cx)/T,(ox+w-cx)/T,C);
+  for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){
+    const x=cx+pos(4*c),y=cy+pos(4*r),p=st.prog[r*C+c],ra=rA(r),cb=cB(c);
+    if(ra<4||cb<4)cells(x,y,4,4,tok.grid,.4);
+    cells(x,y,cb,ra,tok.grid,1);
+    if(p===K)cells(x,y,cb,ra,tok.ink,.55);
+    else if(p>0){cells(x,y,cb,ra,tok.psum,.2+.55*p/K);
+      const a=st.act; if(cfg.kBlock&&!(a&&r>=a.r0&&r<a.r1&&c>=a.c0&&c<a.c1)){g.globalAlpha=1;g.strokeStyle=tok.psum;g.lineWidth=s<4?1:2;g.strokeRect(x+.5,y+.5,cb*s-1,ra*s-1);}}
+  }}
+  g.globalAlpha=1;
+  // Set 3 group boundaries
+  if(!cfg.kOuter&&cfg.group&&st.G<C){
+    g.strokeStyle=tok.mute;g.lineWidth=1;g.setLineDash([4,3]);
+    for(let c=st.G;c<C;c+=st.G){const x=cx+pos(4*c)-tg/2-.5;g.beginPath();g.moveTo(x,by-2);g.lineTo(x,cy+pos(M-1)+s);g.stroke();}
+    g.setLineDash([]);
+  }
+  // K-blocking: output block boundaries
+  if(cfg.kBlock&&st.BH){
+    g.globalAlpha=1;g.strokeStyle=tok.mute;g.lineWidth=1;g.setLineDash([4,3]);
+    for(let c=st.BW;c<C;c+=st.BW){const x=cx+pos(4*c)-tg/2-.5;g.beginPath();g.moveTo(x,by-2);g.lineTo(x,cy+pos(M-1)+s);g.stroke();}
+    for(let r=st.BH;r<R;r+=st.BH){const y=cy+pos(4*r)-tg/2-.5;g.beginPath();g.moveTo(ax,y);g.lineTo(cx+pos(N-1)+s,y);g.stroke();}
+    g.setLineDash([]);
+  }
+  // current step
+  if(cu){
+    const axs=ax+cu.k*s, ays=cy+pos(4*cu.r), bxs=cx+pos(4*cu.c), bys=by+cu.k*s, txs=bxs, tys=ays, ra=rA(cu.r), cb=cB(cu.c);
+    const lw=s<4?1.5:2.5, mn=Math.max(s,3);
+    g.lineWidth=lw;
+    g.strokeStyle=cu.fa?tok.mem:tok.hit;g.strokeRect(axs,ays,mn-1,Math.max(ra*s,3)-1);
+    g.strokeStyle=cu.fb?tok.mem:tok.hit;g.strokeRect(bxs,bys,Math.max(cb*s,3)-1,mn-1);
+    g.strokeStyle=tok.accent;g.strokeRect(txs,tys,Math.max(cb*s,3)-1,Math.max(ra*s,3)-1);
+    g.globalAlpha=.4;g.lineWidth=1;g.setLineDash([3,3]);g.strokeStyle=tok.accent;
+    g.beginPath();g.moveTo(axs+s,ays+2*s);g.lineTo(txs,tys+2*s);g.moveTo(bxs+2*s,bys+s);g.lineTo(txs+2*s,tys);g.stroke();
+    g.setLineDash([]);g.globalAlpha=1;
+  }
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.textAlign='left';g.textBaseline='alphabetic';
+}
+/* zoom and pan */
+function zoomAt(factor,mx,my){
+  if(!geo)return;
+  const old=view.s, ns=Math.max(0.4,Math.min(40,old*factor));
+  if(ns===old)return;
+  const r=ns/old;
+  view.fit=false;view.s=ns>=2?Math.round(ns):ns;
+  view.ox=(view.ox+mx)*(view.s/old)-mx;view.oy=(view.oy+my)*(view.s/old)-my;
+  layout();draw();
+}
+// buttons zoom around the current tile (or the top-left of C), so zooming in never lands on the empty corner
+function anchor(){
+  const {s:sc,pos,cx,cy}=geo, cu=st.cur;
+  const x=cu?cx+pos(4*cu.c)+2*sc:cx, y=cu?cy+pos(4*cu.r)+2*sc:cy;
+  return [Math.max(0,Math.min(geo.w,x-view.ox)),Math.max(0,Math.min(geo.h,y-view.oy))];
+}
+$('zoomIn').onclick=()=>zoomAt(1.5,...anchor());
+$('zoomOut').onclick=()=>zoomAt(1/1.5,...anchor());
+$('zoomFit').onclick=()=>{view.fit=true;view.ox=view.oy=0;layout();draw();};
+$('follow').onchange=e=>{view.follow=e.target.checked;draw();};
+cv.addEventListener('wheel',e=>{
+  if(!(e.ctrlKey||e.metaKey))return;            // plain wheel keeps scrolling the page
+  e.preventDefault();const b=cv.getBoundingClientRect();
+  zoomAt(e.deltaY<0?1.2:1/1.2,e.clientX-b.left,e.clientY-b.top);
+},{passive:false});
+let drag=null;
+cv.addEventListener('pointerdown',e=>{if(!cv.classList.contains('pannable'))return;drag={x:e.clientX,y:e.clientY,ox:view.ox,oy:view.oy};cv.setPointerCapture(e.pointerId);cv.classList.add('dragging');});
+cv.addEventListener('pointermove',e=>{if(!drag)return;
+  view.ox=Math.max(0,Math.min(drag.ox-(e.clientX-drag.x),geo.CW-geo.w));
+  view.oy=Math.max(0,Math.min(drag.oy-(e.clientY-drag.y),geo.CH-geo.h));draw();});
+const endDrag=()=>{drag=null;cv.classList.remove('dragging');};
+cv.addEventListener('pointerup',endDrag);cv.addEventListener('pointercancel',endDrag);
+
+/* ---------- shortcut cases ---------- */
+const B16={...base,bKB:16};
+const S3FIXED={...S3,aFixed:1}, F8={...S3,acc:'auto'}, KB8={...base,aKB:0,kBlock:1,bh:8,bw:8,kc:64,psumW:32};
+// core:1 = shown up front (the comparisons the joint discussion needs); the rest sit under "나머지 케이스".
+const CASES=[
+  // ---- shown up front ----
+  {g:'',M:64,N:128,K:128,cfg:B16,core:1,t:'기준점: Set 2 (B 16 KB)',w:'B 전체가 16 KB 버퍼에 들어가서 모든 원소를 한 번만 읽습니다. 성능 상한이지만 BRAM36을 약 5.5개 씁니다.'},
+  {g:'',M:64,N:128,K:128,cfg:S3,core:1,t:'Set 3 (A, B 모두 flexible)',w:'B 4 KB + 그룹 루프. A 버퍼 남는 칸에 앞쪽 행 타일 7개를 끝까지 남겨 두어, 묶음(점선)이 바뀔 때 그 7개는 다시 읽지 않습니다. 같은 BRAM의 fixed A 버퍼보다 약 14% 빠릅니다.'},
+  {g:'',M:64,N:128,K:128,cfg:F8,core:1,t:'Set 3 + 누산기 8세트',w:'남는 A 칸을 이미 앞쪽 행 타일이 쓰고 있어서, 누산기 8세트가 더하는 이득은 약 2%입니다. 누산기 448 B를 A 버퍼에 더해도 거의 같은 효과가 납니다.'},
+  {g:'',M:64,N:128,K:512,cfg:F8,core:1,t:'K = 512에서 누산기 8세트의 추가분',w:'K가 커지면 A 버퍼에 남겨 둘 수 있는 행 타일이 줄어서 누산기 쪽 이득이 조금 커집니다(약 5%).'},
+  {g:'',M:64,N:128,K:128,cfg:{...base,aKB:0,acc:4,dir:'auto'},core:1,t:'Compute 팀 Idea 1: 버퍼 없이 누산기 4세트',w:'공유되는 피연산자 쪽만 1/4로 줄어서 총 읽기는 −37.5%입니다. A 버퍼만 둔 Set 1보다도 느려서, 단독으로는 버퍼를 대신하지 못합니다.'},
+  {g:'',M:64,N:128,K:1024,cfg:F8,core:1,t:'큰 K (max_dimensions): 4 KB 버퍼의 한계',w:'K = 1024면 A 4 KB에 행 타일 1개, B 4 KB에 열 타일 1개만 들어가서 flexible buffer와 누산기 모두 효과가 없습니다. 큰 K에서는 버퍼를 키우거나 K 묶음 같은 다른 구조가 필요합니다.'},
+  {g:'',M:64,N:128,K:1024,cfg:KB8,core:1,t:'큰 K: K 묶음 (블록 32×32, Kc 64)',w:'A 청크 2 KB + B 청크 2 KB + psum 4 KB로 Set 3과 같은 8 KB를 쓰면서 읽기가 1/4이 됩니다. 묶음마다 psum을 꺼내고 저장하는 시간(32비트 포트, 약 25만 사이클)을 더해도 Set 3보다 약 2.8배 빠릅니다. RTL에서는 mac_array와 결과 쓰기 사이에 psum 단계가 새로 필요합니다.'},
+  // ---- the rest ----
+  {g:'Memory 팀 Set 변형',M:64,N:128,K:128,cfg:{...base,bKB:4},t:'B 버퍼 4 KB, 그룹 루프 없이 (Set 2 루프)',w:'앞쪽 8개 열 타일만 버퍼에 남고, 나머지 24개 열 타일의 B를 행 타일마다 다시 읽습니다. Set 3이 그룹 루프를 넣은 이유입니다.'},
+  {g:'Memory 팀 Set 변형',M:64,N:128,K:128,cfg:{...base,bKB:8,group:1},t:'Set 3 + B 8 KB',w:'BRAM36을 1개 더 쓰면 G = 16이 되어 묶음이 4개에서 2개로 줄고, A 재읽기가 약 40% 줄어 Set 3보다 약 14% 빠릅니다.'},
+  {g:'Memory 팀 Set 변형',M:64,N:64,K:64,cfg:S3,t:'Set 3이 B를 다 담는 크기',w:'B가 4 KB라 4 KB 버퍼에 다 들어가서 묶을 필요가 없습니다. 그래서 Set 2와 같은 시간이 나옵니다.'},
+  {g:'Memory 팀 Set 변형',M:64,N:128,K:128,L:23,cfg:S3,t:'Set 3, 메모리 지연 23',w:'지연 1에서 Set 2의 1.27배였던 시간이 지연 23에서는 1.50배가 됩니다. 읽기 한 바이트가 비쌀수록 버퍼 차이가 크게 드러납니다.'},
+  {g:'fixed buffer 비교',M:64,N:128,K:128,cfg:S3FIXED,t:'Set 3, A 버퍼를 fixed buffer로',w:'A 버퍼가 fixed buffer라 행 타일 1개만 담습니다. 새 행 타일이 오면 덮어써서 묶음마다 A를 처음부터 다시 읽고, A 숫자가 4가 됩니다. A 버퍼 4 KB 중 7/8은 쓰이지 않습니다.'},
+  {g:'fixed buffer 비교',M:64,N:128,K:128,cfg:{...S3FIXED,group:0,acc:4},t:'A fixed에 누산기 4세트 (B 방향)',w:'B 방향 누산기는 행 타일 4개의 A가 동시에 필요한데, fixed A 버퍼에는 1개만 들어가서 나머지를 열 타일마다 다시 읽습니다. 같은 구성이 flexible이면 61,440바이트인 읽기가 251,904바이트가 됩니다. 누산기 복제를 쓰려면 A 버퍼가 flexible이어야 합니다.'},
+  {g:'fixed buffer 비교',M:64,N:128,K:128,cfg:{...S3,bFixed:1},t:'Set 3의 B 버퍼를 fixed buffer로',w:'B 4 KB에 열 타일이 1개만 들어가서 G = 1이 되고, 묶지 못한 채 B를 행 타일마다 다시 읽습니다. Set 3이 B를 flexible buffer로 만든 이유입니다.'},
+  {g:'누산기 복제 세부',M:64,N:128,K:128,cfg:{...base,bKB:4,acc:4},t:'"B 버퍼 1/4 + 누산기 4세트 = 같은 효과"?',w:'행렬을 훑는 횟수는 16번에서 4번으로 줄지만, 버퍼 밖 B는 그때마다 다시 읽습니다. Set 2와 같아지지 않고 Set 3보다도 느립니다.'},
+  {g:'누산기 복제 세부',M:64,N:128,K:64,cfg:F8,t:'K = 64에서는 누산기를 쓰지 않음',w:'K가 작으면 A 버퍼에 행 타일 15개를 유지할 수 있어 그룹 루프 쪽이 덜 읽습니다. 그래서 누산기 8세트를 만들어도 이 K에서는 쓰지 않는 게 유리합니다.'},
+  {g:'누산기 복제 세부',M:64,N:128,K:256,cfg:{...base,bKB:4,acc:8},t:'K = 256에서 8세트를 다 쓰면',w:'행 타일 8개분 A(2,048칸)가 A 버퍼(1,024칸)에 절반만 들어가서, 나머지 절반을 열 타일마다 다시 읽습니다. A 버퍼가 받쳐 주는 4세트만 쓸 때보다 2배 느립니다.'},
+  {g:'누산기 복제 세부',M:64,N:128,K:128,cfg:{...base,bKB:4,acc:4,dir:'a'},t:'같은 4세트를 A 방향으로',w:'A는 A 버퍼가 이미 한 번씩만 읽고 있어 줄일 게 없습니다. A 버퍼가 있으면 누산기는 B 방향으로 써야 합니다.'},
+  {g:'누산기 복제 세부',M:64,N:128,K:128,cfg:{...base,aKB:0,acc:4,dir:'ab'},t:'버퍼 없이 누산기 4세트 (2 × 2)',w:'A와 B를 둘 다 절반씩 줄여 한 방향 4세트보다 적게 읽습니다. 버퍼가 없을 때는 양쪽으로 나누는 편이 낫습니다.'},
+  {g:'누산기 복제 세부',M:64,N:128,K:128,cfg:{...base,aKB:0,bKB:16,acc:4,dir:'a'},t:'A 버퍼 대신 A 방향 복제',w:'A 방향 복제가 쓸모 있는 유일한 경우입니다. A 버퍼를 빼고 누산기 4세트로 대신하면 A를 8번 읽어 Set 2보다 느리지만, 둘 다 없는 경우보다는 훨씬 빠릅니다.'},
+  {g:'누산기 복제 세부',M:2,N:128,K:3,cfg:{...base,aKB:0,acc:4,dir:'a'},t:'wide_n: 행이 적으면 A 방향',w:'A 조각을 열 타일 4개가 같이 써서 576 → 432바이트로 줄어듭니다. A 버퍼를 둔 Set 1(390바이트)에는 못 미칩니다.'},
+  {g:'누산기 복제 세부',M:64,N:3,K:2,cfg:{...base,aKB:0,acc:4,dir:'b'},t:'tall_m: 열이 적으면 B 방향',w:'B 조각을 행 타일 4개가 같이 써서 224 → 152바이트로 줄어듭니다. B 버퍼를 둔 Set 2는 134바이트입니다.'},
+  {g:'누산기 복제 세부',M:64,N:32,K:32,cfg:{...base,aKB:.5,acc:8},t:'작은 그림으로 보는 "A 버퍼가 모자랄 때"',w:'A 0.5 KB(128칸)에 행 타일 4개만 들어가는데 8세트를 쓰면, A 격자 오른쪽 절반(k ≥ 16)을 열 타일마다 다시 읽어 숫자가 8이 됩니다. A 버퍼를 1 KB로 올리면 사라집니다.'},
+  {g:'큰 K와 k-outer',M:64,N:128,K:1024,cfg:B16,t:'max_dimensions: Set 2 (16 KB)',w:'B가 128 KB라 16 KB 버퍼에는 열 타일 4개만 남고, 나머지는 행 타일마다 다시 읽습니다(B를 약 14번).'},
+  {g:'큰 K와 k-outer',M:64,N:128,K:1024,cfg:{...base,bKB:16,group:1},t:'max_dimensions: Set 3 그룹 루프 + B 16 KB',w:'G = 4로 묶으면 B는 한 번만 읽고 A를 8번 읽습니다. Set 2보다 2배 넘게 빠릅니다.'},
+  {g:'큰 K와 k-outer',M:64,N:128,K:1024,cfg:{...base,aKB:8,bKB:4,group:1,acc:'auto'},t:'max_dimensions: A 8 KB + 누산기 8세트',w:'A 버퍼를 8 KB로 키우면 K = 1024에서도 누산기 2세트를 써서 4 KB 구성보다 약 1.8배 빠릅니다. BRAM36이 1개 늘어납니다.'},
+  {g:'큰 K와 k-outer',M:64,N:128,K:1024,cfg:{...base,kOuter:1,aKB:0},t:'max_dimensions: 완전 k-outer',w:'모든 원소를 한 번만 읽지만, 타일마다 k 단계마다 psum 32 KB를 꺼내고 저장해서 그 시간(약 105만 사이클)이 더해집니다. psum은 512비트 포트로 BRAM36 8개를 씁니다. psum 접근을 MAC과 겹칠 수 있다면 약 115만 사이클까지 줄어듭니다.'},
+  {g:'큰 K와 k-outer',M:64,N:128,K:1024,cfg:{...KB8,psumW:512},t:'max_dimensions: K 묶음, psum 512비트 포트',w:'psum 포트를 넓히면 꺼내기·저장이 245,760 → 15,360사이클로 줄어 약 10% 빨라집니다. 대신 psum 4 KB에 BRAM36이 1개에서 8개로 늘어납니다.'},
+  {g:'큰 K와 k-outer',M:64,N:128,K:512,cfg:KB8,t:'K = 512: K 묶음 vs Set 3',w:'K = 512에서도 Set 3(약 185만 사이클)보다 약 38% 빠릅니다. 버퍼 재사용이 K와 상관없이 블록 크기로 정해지기 때문입니다.'},
+  {g:'큰 K와 k-outer',M:64,N:128,K:128,cfg:KB8,t:'벤치마크에서는 K 묶음이 Set 3보다 느림',w:'K = 128에서는 Set 3보다 약 1.5배 느립니다. 블록 하나가 열 타일 8개라 A를 4번, B를 2번 읽는데, Set 3은 4 KB A 버퍼에 행 타일을 남겨 두어 더 적게 읽습니다. K 묶음의 이득은 K가 클 때 생깁니다.'},
+  {g:'큰 K와 k-outer',M:64,N:128,K:128,cfg:{...base,kOuter:1,aKB:0},t:'완전 k-outer (벤치마크)',w:'읽기는 Set 2와 같지만 psum 꺼내기·저장이 더해져 Set 2보다 약 1.9배 느립니다(MAC과 겹치지 않는다고 가정). k-outer의 이득은 K가 클 때 생깁니다.'},
+  {g:'공식 testbench 특수 크기',M:3,N:7,K:5,cfg:{...base,aKB:0},t:'rectangular: 가장자리 타일과 마스크',w:'행 3개, 열 7개라 타일이 3×4와 3×3으로 잘립니다. 옅은 칸은 마스크로 꺼진 자리이고 메모리에서 읽지도 않습니다.'},
+  {g:'공식 testbench 특수 크기',M:2,N:128,K:3,cfg:B16,t:'wide_n: 행 타일이 하나면 B 버퍼는 할 일이 없음',w:'B를 다시 쓸 행 타일이 없어서 B 숫자는 버퍼가 있어도 1이고, Set 1과 읽기·시간이 같습니다.'},
+  {g:'공식 testbench 특수 크기',M:64,N:3,K:2,cfg:{...base},t:'tall_m: 열 타일이 하나면 A 버퍼는 할 일이 없음',w:'열 타일이 하나라 A를 다시 쓸 일이 없어서 Set 1은 원래 설계와 읽기가 같습니다. B 버퍼를 넣으면(Set 2) 224 → 134바이트로 줄어듭니다.'}
+];
+const dirL={b:'',a:' (A 방향)',ab:' (양쪽)',auto:' (자동)'};
+const cfgLabel=c=>c.kOuter?'k-outer':c.kBlock?[`K 묶음 ${c.bh}×${c.bw} 타일 · Kc ${c.kc} · psum ${c.psumW}비트`,c.acc>1?`누산기 ${c.acc}세트${dirL[c.dir||'b']}`:''].filter(Boolean).join(' · '):[c.aKB?`A ${c.aKB} KB${c.aFixed?' fixed':''}`:'A 없음',c.bKB==='all'?'B 전부':c.bKB?`B ${c.bKB} KB${c.bFixed?' fixed':''}`:'B 버퍼 없음',c.group&&c.acc!=='auto'&&c.bKB?'그룹 루프':'',c.acc==='auto'?'누산기 8세트 (K에 맞춤)':c.acc>1?`누산기 ${c.acc}세트${dirL[c.dir||'b']}`:''].filter(Boolean).join(' · ');
+let activeCase=-1;
+function caseCard(c,i){
+  const L=c.L||1, r=c.res||(c.res=result(c.cfg,c.M,c.N,c.K,L));
+  return `<button type="button" class="case${i===activeCase?' on':''}" data-i="${i}"><span class="cfg">${c.M}×${c.N}×${c.K}${L>1?` · 지연 ${L}`:''} · ${cfgLabel(c.cfg)}</span><b>${c.t}</b><span class="why">${c.w}</span><span class="res"><span>${fmt(r.cyc)} cycles</span><span>읽기 ${fmt(r.bytes)} B · 최소 대비 ${r.ratio.toFixed(2)}×</span></span></button>`;
+}
+let moreOpen=false;
+function renderCases(){
+  const rest=CASES.map((c,i)=>[c,i]).filter(([c])=>!c.core), groups=[...new Set(rest.map(([c])=>c.g))];
+  $('caseList').innerHTML=`<div class="cases">${CASES.map((c,i)=>c.core?caseCard(c,i):'').join('')}</div>`+
+    `<details class="more" id="moreCases"${moreOpen?' open':''}><summary>나머지 케이스 ${rest.length}개 더 보기</summary>`+
+    groups.map(gname=>`<h3 class="cgroup">${gname}</h3><div class="cases">${rest.filter(([c])=>c.g===gname).map(([c,i])=>caseCard(c,i)).join('')}</div>`).join('')+'</details>';
+  $('moreCases').addEventListener('toggle',e=>{moreOpen=e.target.open;});
+  $('caseList').querySelectorAll('.case').forEach(b=>b.onclick=()=>{
+    const c=CASES[+b.dataset.i];activeCase=+b.dataset.i;
+    cfg={...c.cfg};syncControls();setSize(c.M,c.N,c.K,c.L||1);renderCases();
+    $('sim').scrollIntoView({behavior:reduce?'auto':'smooth'});
+  });
+}
+/* ---------- saved results (per viewer, localStorage) ---------- */
+const SAVE_KEY='gemmReuse.savedResults';
+let saved=[];
+try{const v=JSON.parse(localStorage.getItem(SAVE_KEY)||'[]');if(Array.isArray(v))saved=v.filter(e=>e&&e.cfg&&e.M&&e.N&&e.K);}catch(e){}
+const storeSaved=()=>{try{localStorage.setItem(SAVE_KEY,JSON.stringify(saved));}catch(e){}};
+const savedId=e=>key(e.cfg)+'@'+[e.M,e.N,e.K,e.L].join('x');
+function renderSaved(){
+  const el=$('savedList');
+  $('clearRes').disabled=!saved.length;
+  if(!saved.length){el.innerHTML='<div class="empty">아직 저장한 결과가 없습니다. 크기와 설정을 고른 뒤 “지금 결과 저장”을 누르세요.</div>';return;}
+  const rows=saved.map(e=>({e,r:result(e.cfg,e.M,e.N,e.K,e.L)})), sz=e=>[e.M,e.N,e.K,e.L].join('x'), best={}, cur=key(cfg)+'@'+[M,N,K,LAT].join('x');
+  rows.forEach(({e,r})=>{best[sz(e)]=Math.min(best[sz(e)]??Infinity,r.cyc);});
+  const src=(m,b,g)=>`${fmt(m)} / ${fmt(b)} / ${fmt(g)}`;
+  el.innerHTML=`<div class="tw"><table><thead><tr><th>#</th><th class="l">크기</th><th class="l">설정</th><th>메모리 읽기 (B)</th><th>A: 메모리 / 버퍼 / staging</th><th>B: 메모리 / 버퍼 / staging</th><th>사이클</th><th>같은 크기에서 가장 빠른 것 대비</th><th></th></tr></thead><tbody>`+
+    rows.map(({e,r},i)=>`<tr class="row${savedId(e)===cur?' on':''}" data-i="${i}"><td>${i+1}</td><td class="l">${e.M}×${e.N}×${e.K}${e.L>1?` · 지연 ${e.L}`:''}</td><td class="cfgc">${e.name?`<b>${e.name}</b> · `:''}${cfgLabel(e.cfg)}</td><td>${fmt(r.bytes)}</td><td>${src(r.readsA,r.bufA,r.stgA)}</td><td>${src(r.readsB,r.bufB,r.stgB)}</td><td>${fmt(r.cyc)}</td><td class="${r.cyc===best[sz(e)]?'best':''}">${(r.cyc/best[sz(e)]).toFixed(2)}×</td><td><button class="del" type="button" data-del="${i}" aria-label="${i+1}번 결과 삭제" title="삭제">×</button></td></tr>`).join('')+
+    '</tbody></table></div>';
+  el.querySelectorAll('tr.row').forEach(tr=>tr.onclick=ev=>{
+    const d=ev.target.closest('[data-del]');
+    if(d){saved.splice(+d.dataset.del,1);storeSaved();renderSaved();return;}
+    const e=saved[+tr.dataset.i];activeCase=-1;cfg={...e.cfg};syncControls();setSize(e.M,e.N,e.K,e.L);renderCases();renderSaved();
+  });
+}
+$('saveRes').onclick=()=>{
+  const p=PRESETS[presetIndex(cfg)], e={M,N,K,L:LAT,cfg:{...cfg},name:p?p.name:''};
+  if(saved.some(x=>savedId(x)===savedId(e))){$('saveRes').textContent='이미 저장됨';setTimeout(()=>{$('saveRes').textContent='지금 결과 저장';},1200);return;}
+  saved.push(e);storeSaved();renderSaved();
+};
+$('clearRes').onclick=()=>{saved=[];storeSaved();renderSaved();};
+
+/* ---------- boot ---------- */
+function renderTheme(){readTokens();draw();}
+readTokens();computePresets();syncControls();rebuild();advanceTo(total());
+layout();renderSide();renderCmp();renderCases();renderSaved();draw();
+new ResizeObserver(()=>{layout();draw();}).observe(document.querySelector('.wrap'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',renderTheme);
+new MutationObserver(renderTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{draw();});
+})();
+</script>
