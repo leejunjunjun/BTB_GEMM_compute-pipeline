@@ -9,30 +9,24 @@ Break the Bottleneck 프로젝트의 GEMM MAC array RTL 및 검증 소스입니�
 | Accumulator duplication | [mac_array_acc_duplicated.v](rtl/mac_array/mac_array_acc_duplicated.v) | ACC duplication 단독 비교 |
 | PE folding | [mac_array_PE_folding.v](rtl/mac_array/mac_array_PE_folding.v) | PE folding 단독 비교 |
 | Product module passing | [mac_array_path.v](rtl/mac_array/mac_array_path.v) | multiplier와 B 특수값 경로 단독 비교 |
+## Accmulator duplication(Data_reuse) [target : buffer size가 모든 input을 커버하지 못할때 memory access의 횟수를 줄인다 ]
+결정해야할 변수 : REUSE 횟수, 어떤 data (A,B)
 
-## ACC duplication (Data reuse)
+진행할simulation option 정리 / 사용한 testbench file, other module file 명
 
-입력 전체를 버퍼에 담기 어려울 때 A 또는 B를 여러 출력 타일에 재사용해 메모리 읽기 횟수를 줄이는 것이 목표입니다. 한 그룹에서 처리할 타일 수와 재사용할 피연산자(A 또는 B)는 상위 모듈의 입력 공급 순서에서 정합니다.
 
-## PE folding
-
-4×4 타일의 16개 누산 위치를 유지하면서, 8개 product 유닛을 두 phase에 걸쳐 재사용합니다. 면적 비교는 합성 결과를 기준으로 하고, 시뮬레이션에서는 입력 수락 간격과 전체 cycle 수를 비교합니다.
-
-### 타이밍 다이어그램
-
-A와 B는 각각 signed INT8 값 4개를 묶은 32-bit 패킷입니다. 아래 예시는 reset 이후 모든 마스크가 활성화되고 `result_ready=1`인 상태에서 A/B 패킷 3쌍을 처리합니다.
-
-1. **C1, C3, C5 (`phase=0`)** — PE0~7이 A 패킷의 앞쪽 2개 lane과 B의 4개 lane을 곱합니다. `next_sum0~7`을 조합 논리에서 계산하고, 각 cycle 끝의 상승 에지에서 ACC0~7을 갱신합니다.
-2. **C2, C4, C6 (`phase=1`)** — 같은 PE0~7이 A 패킷의 뒤쪽 2개 lane과 동일한 B 패킷을 사용합니다. cycle 끝의 상승 에지에서 ACC8~15를 갱신하고, `op_valid && op_ready`로 해당 패킷 쌍을 수락합니다.
-3. **첫 입력과 마지막 입력** — `op_first`가 켜진 C1~C2에서는 0부터 누산합니다. C3~C6에서는 이전 부분합에 곱을 더합니다. `op_last`가 켜진 마지막 입력을 C6 끝에서 수락하면 16개 INT32 결과가 `result_data`에 등록되고 `result_valid`가 올라갑니다.
+## PE folding [target : cycle pipelining /Area reduce]
+timing diagram 
+(관련 설명 추가)
 
 ![PE folding 타이밍 다이어그램](docs/images/PE_folding_timing_diagram.png)
 
-Compute v1/v2에서 `PE_Folding=0`과 `1`을 비교합니다. Folding을 켠 경우 입력 데이터와 마스크, `op_first`, `op_last`, B tag를 두 번째 phase의 handshake까지 유지합니다.
+진행할 시뮬레이션 option 정리
 
-## Product module passing
+## Product module passing [targete : power]
+단순 simulation 상에서 확인 불가능
 
-B tag에 따라 일반 곱셈, 0, ±A, 왼쪽 시프트 경로를 선택합니다. 특수값 경로의 사용 빈도는 경로별 event 신호를 추가해 셀 수 있습니다. 전력은 별도 power analysis로 비교합니다.
+-> sparsity team의 module처럼 is_{specialcase} event 신호를 추가하면 특수 case에 대한 빈번함? 체크 가능 
 
 ## mac_array_compute.v
 
