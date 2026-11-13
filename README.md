@@ -14,6 +14,32 @@ Break the Bottleneck 프로젝트의 GEMM MAC array RTL 및 검증 소스입니�
 
 진행할simulation option 정리 / 사용한 testbench file, other module file 명
 
+### mac_array 입력 순서 규약
+bank 번호는 별도 포트 없이 **op 순서**로 정해진다. 상위 모듈(gemm_control, operand_loader)은 아래 순서를 지켜야 한다.
+
+| 구간 | 공급 순서 | bank 선택 |
+| --- | --- | --- |
+| 그룹 첫 k | 타일 0..S-1을 `op_first=1`로 차례로 공급 | 그룹 시작(`op_first && 직전 op_last`)이면 0, 이후 `op_first`마다 +1. 마지막 번호를 `grp_last`에 기록 |
+| 중간 k | 같은 타일 순서로 공급 | +1, `grp_last` 다음은 0으로 순환 |
+| 마지막 k | 같은 순서, 각 타일 `op_last=1` | 타일마다 결과 출력 |
+
+- 그룹 크기 S는 첫 k에서 `op_first`가 들어온 개수로 자동으로 정해진다. 따라서 `REUSE` 이하에서 **세트 수를 런타임에 바꿔도 mac_array는 수정할 필요가 없다.**
+- 어느 operand(A/B)를 재사용할지도 공급 순서로 정해진다(아래 표).
+
+### 결정해야 할 변수
+
+**1. 재사용 데이터 (방향)**
+
+| | A 재사용 (A 방향) | B 재사용 (B 방향) |
+| --- | --- | --- |
+| 그룹으로 묶는 타일 | 같은 행, 열 타일 S개 | 같은 열, 행 타일 S개 |
+| loader가 고정하는 값 | `op_a` | `op_b` |
+| 줄어드는 외부 읽기 | A | B |
+| 함께 필요한 것 | B 열 타일 S개 공급 | A 행 타일 S개 (A 버퍼 4·S·K B) |
+| 구현 상태 | RTL 실측 완료 (`rtl_acc_r2/r3/r4/r8`, control `A_REUSE`) | 미구현 (Memory팀 flexible A 버퍼 이후) |
+
+Set 3 그룹 루프는 A 캐시로 A를 이미 재사용하므로, A 방향 복제와 함께 쓰면 이득이 겹친다. 그룹 루프와 보완 관계인 것은 B 방향이다.
+
 
 ## PE folding [target : cycle pipelining /Area reduce]
 timing diagram 
