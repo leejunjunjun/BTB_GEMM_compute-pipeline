@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="570" viewBox="0 0 1040 570" role="img" aria-labelledby="title"><title id="title">NM MAC array dataflow</title><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#526784"/></marker></defs>
+<rect x="0" y="0" width="1040" height="570" rx="0" fill="#f4f8fd" stroke="#c6d4e5"/>
+<text x="36" y="49" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="30" font-weight="700" text-anchor="start">NM MAC array dataflow</text>
+<text x="37" y="77" fill="#526784" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="400" text-anchor="start">4 × 4 output tile  /  PE_Folding = 0  /  one input operation</text>
+<rect x="36" y="111" width="275" height="244" rx="10" fill="#ffffff" stroke="#c6d4e5"/>
+<text x="55" y="139" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" text-anchor="start">A tile · op_a [127:0]</text>
+<text x="55" y="163" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="start">Four K slices, four INT8 rows each</text>
+<text x="104" y="191" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="700" text-anchor="middle">k0</text>
+<text x="156" y="191" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="700" text-anchor="middle">k1</text>
+<text x="208" y="191" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="700" text-anchor="middle">k2</text>
+<text x="260" y="191" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="700" text-anchor="middle">k3</text>
+<text x="55" y="222" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="start">r0</text>
+<rect x="80" y="202" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="104" y="220" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A00</text>
+<rect x="132" y="202" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="156" y="220" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A01</text>
+<rect x="184" y="202" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="208" y="220" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A02</text>
+<rect x="236" y="202" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="260" y="220" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A03</text>
+<text x="55" y="252" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="start">r1</text>
+<rect x="80" y="232" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="104" y="250" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A10</text>
+<rect x="132" y="232" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="156" y="250" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A11</text>
+<rect x="184" y="232" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="208" y="250" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A12</text>
+<rect x="236" y="232" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="260" y="250" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A13</text>
+<text x="55" y="282" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="start">r2</text>
+<rect x="80" y="262" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="104" y="280" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A20</text>
+<rect x="132" y="262" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="156" y="280" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A21</text>
+<rect x="184" y="262" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="208" y="280" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A22</text>
+<rect x="236" y="262" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="260" y="280" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A23</text>
+<text x="55" y="312" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="start">r3</text>
+<rect x="80" y="292" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="104" y="310" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A30</text>
+<rect x="132" y="292" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="156" y="310" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A31</text>
+<rect x="184" y="292" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="208" y="310" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A32</text>
+<rect x="236" y="292" width="48" height="26" rx="4" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="260" y="310" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A33</text>
+<text x="55" y="338" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="start">LSB byte index = 4k + r</text>
+<rect x="351" y="111" width="151" height="244" rx="10" fill="#ffffff" stroke="#c6d4e5"/>
+<text x="427" y="142" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" text-anchor="middle">A select</text>
+<text x="427" y="171" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">4:1 per PE row</text>
+<text x="427" y="195" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">k[c] per column</text>
+<text x="427" y="251" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">route A[r,k[c]]</text>
+<path d="M311 235H351" fill="none" stroke="#526784" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M502 235H520V320H542" fill="none" stroke="#526784" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="542" y="107" width="462" height="112" rx="10" fill="#ffffff" stroke="#c6d4e5"/>
+<text x="562" y="132" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="700" text-anchor="start">Packed B values + K indices</text>
+<text x="562" y="154" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="start">op_b [31:0] · column_k_position [7:0]</text>
+<rect x="561" y="169" width="100" height="35" rx="5" fill="#dff5ec" stroke="#c6d4e5"/>
+<text x="611" y="191" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">k=1, B=5</text>
+<path d="M611 219V254" fill="none" stroke="#526784" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="669" y="169" width="100" height="35" rx="5" fill="#dff5ec" stroke="#c6d4e5"/>
+<text x="719" y="191" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">k=3, B=9</text>
+<path d="M719 219V254" fill="none" stroke="#526784" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="777" y="169" width="100" height="35" rx="5" fill="#dff5ec" stroke="#c6d4e5"/>
+<text x="827" y="191" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">k=0, B=7</text>
+<path d="M827 219V254" fill="none" stroke="#526784" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="885" y="169" width="100" height="35" rx="5" fill="#dff5ec" stroke="#c6d4e5"/>
+<text x="935" y="191" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">k=2, B=1</text>
+<path d="M935 219V254" fill="none" stroke="#526784" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M542 186H427V216" fill="none" stroke="#526784" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="542" y="254" width="462" height="176" rx="10" fill="#ffffff" stroke="#c6d4e5"/>
+<text x="611" y="279" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="700" text-anchor="middle">col 0</text>
+<rect x="561" y="288" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="611" y="307" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A01 × 5</text>
+<rect x="561" y="319" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="611" y="338" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A11 × 5</text>
+<rect x="561" y="350" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="611" y="369" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A21 × 5</text>
+<rect x="561" y="381" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="611" y="400" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A31 × 5</text>
+<text x="719" y="279" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="700" text-anchor="middle">col 1</text>
+<rect x="669" y="288" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="719" y="307" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A03 × 9</text>
+<rect x="669" y="319" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="719" y="338" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A13 × 9</text>
+<rect x="669" y="350" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="719" y="369" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A23 × 9</text>
+<rect x="669" y="381" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="719" y="400" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A33 × 9</text>
+<text x="827" y="279" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="700" text-anchor="middle">col 2</text>
+<rect x="777" y="288" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="827" y="307" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A00 × 7</text>
+<rect x="777" y="319" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="827" y="338" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A10 × 7</text>
+<rect x="777" y="350" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="827" y="369" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A20 × 7</text>
+<rect x="777" y="381" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="827" y="400" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A30 × 7</text>
+<text x="935" y="279" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="700" text-anchor="middle">col 3</text>
+<rect x="885" y="288" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="935" y="307" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A02 × 1</text>
+<rect x="885" y="319" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="935" y="338" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A12 × 1</text>
+<rect x="885" y="350" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="935" y="369" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A22 × 1</text>
+<rect x="885" y="381" width="100" height="27" rx="4" fill="#fff1df" stroke="#c6d4e5"/>
+<text x="935" y="400" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">A32 × 1</text>
+<text x="37" y="397" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="700" text-anchor="start">Each cell is one product unit.</text>
+<text x="37" y="423" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="400" text-anchor="start">op_b_tag selects multiply, ±A, shift, or zero.</text>
+<text x="37" y="448" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="400" text-anchor="start">B = 1 uses the +A path with tag 0010.</text>
+<path d="M773 430V463" fill="none" stroke="#526784" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="542" y="463" width="462" height="72" rx="10" fill="#e9f2ff" stroke="#c6d4e5"/>
+<text x="773" y="490" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="700" text-anchor="middle">work_mask → 32-bit ACC → result_data</text>
+<text x="773" y="515" fill="#142d4c" font-family="DejaVu Sans, sans-serif" font-size="13" font-weight="400" text-anchor="middle">op_first starts a sum · op_last publishes the tile</text>
+</svg>

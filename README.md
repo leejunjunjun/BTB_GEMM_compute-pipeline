@@ -2,6 +2,13 @@
 
 Break the Bottleneck 프로젝트의 GEMM MAC array RTL 및 검증 소스입니다.
 
+## 폴더 구성
+
+| 경로 | 내용 |
+| --- | --- |
+| [`rtl/mac_array/`](rtl/mac_array/) | Compute v1·v2 및 ACC duplication, PE folding, product 경로 비교 RTL |
+| [`NM/rtl/`](NM/rtl/) | NM compute RTL, 열별 K 선택 블록 다이어그램, 구현 설명 |
+
 | 설계 | RTL | 용도 |
 | --- | --- | --- |
 | Compute v1 | [mac_array_compute.v](rtl/mac_array/mac_array_compute.v) | ACC duplication, PE folding, product 경로 통합 |
