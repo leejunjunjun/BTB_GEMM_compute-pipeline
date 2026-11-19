@@ -7,7 +7,7 @@ module mac_array_compute #(parameter PE_ROWS = 4, PE_COLS=4, ACC_dup=0, PE_Foldi
     output reg [32*4*PE_COLS-1:0] result_data, output reg [4*PE_COLS-1:0] result_mask,
     output [4*PE_COLS-1:0] event_mac, event_nonzero_mac,
 
-    input [2*PE_COLS-1:0] column_k_position; // B input, K position (8bit)
+    input [2*PE_COLS-1:0] column_k_position // B input, K position (8bit)
 );
     localparam P=PE_ROWS*PE_COLS;
     localparam PHASE_ROWS = PE_Folding ? (PE_ROWS/2) : PE_ROWS;
